@@ -1,0 +1,7 @@
+build/
+*.o
+*.out
+*.dylib
+.DS_Store
+.vscode/
+.idea/
