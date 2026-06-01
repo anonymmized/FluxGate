@@ -334,6 +334,8 @@ private:
                 return write_mitm_error("403 Forbidden");
             if (result.modified) {
                 metrics_->on_request_filtered();
+                if (result.estimated_tokens_removed > 0)
+                    metrics_->add_estimated_tokens_saved(result.estimated_tokens_removed);
                 Logger::instance().filtered(id_, target_.host, request.method, request.target);
             }
         }

@@ -103,8 +103,12 @@ FilterResult ChatHistoryLimitFilter::apply(const FilterContext&, const HttpReque
     }
     if (arr_close == std::string::npos) return {};
 
+    // Count chars of the removed prefix to estimate tokens saved (4 chars ≈ 1 token).
+    const std::size_t removed_chars = (arr_close - arr_open + 1) - new_array.size();
+    const std::size_t tokens_removed = removed_chars / 4;
+
     body.replace(arr_open, arr_close - arr_open + 1, new_array);
-    return {.modified = true};
+    return {.modified = true, .estimated_tokens_removed = tokens_removed};
 }
 
 } // namespace fluxgate
