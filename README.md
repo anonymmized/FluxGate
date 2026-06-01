@@ -1,5 +1,7 @@
 # FluxGate
 
+[![CI](https://github.com/anonymmized/FluxGate/actions/workflows/ci.yml/badge.svg)](https://github.com/anonymmized/FluxGate/actions/workflows/ci.yml)
+
 > **Cut your LLM API bill by 40–70% without touching your application code.**
 
 FluxGate is a high-performance C++20 transparent HTTPS proxy that sits between your application and any LLM API (OpenAI, Anthropic, Gemini, etc.). It intercepts requests, strips redundant tokens, and caches identical queries — all with sub-millisecond local overhead.
@@ -31,14 +33,26 @@ FluxGate terminates TLS from your client (MITM with a local CA you generate your
 
 ## Quick start
 
-### 1. Build
+### Option A — Docker (recommended)
 
 ```sh
-cmake -S . -B build
-cmake --build build --parallel
+# Generate CA (one-time setup)
+docker run --rm -v $(pwd)/certs:/certs fluxgate \
+  --generate-ca /certs/fluxgate-ca
+
+# Copy fluxgate.toml.example → fluxgate.toml and adjust paths
+cp fluxgate.toml.example fluxgate.toml
+
+docker compose up -d
 ```
 
-Requires: C++20 compiler, CMake ≥ 3.15, OpenSSL. `simdjson` is fetched automatically.
+### Option B — Build from source
+
+```sh
+cmake -S . -B build && cmake --build build --parallel
+```
+
+Requires: C++20 compiler, CMake ≥ 3.15, OpenSSL. `simdjson` and `toml++` are fetched automatically.
 
 ### 2. Generate a local CA
 
@@ -94,6 +108,11 @@ curl --proxy http://127.0.0.1:8080 https://api.openai.com/v1/chat/completions ..
 | `--cache-max-entries N` | `4096` | Max cached responses |
 | `--admin host:port` | `127.0.0.1:9090` | Admin/metrics endpoint |
 | `--no-admin` | on | Disable admin endpoint |
+| `--allow host` | — | Add host to MITM allowlist (repeatable) |
+| `--deny host` | — | Add host to MITM denylist (repeatable) |
+| `--config path` | — | Load settings from TOML file |
+| `--dump-config` | — | Print current config as TOML and exit |
+| `--admin-token secret` | — | Require `Authorization: Bearer secret` on admin endpoints |
 | `--generate-ca prefix` | — | Generate a new local CA and exit |
 
 ## Admin endpoints
@@ -136,11 +155,15 @@ ctest --test-dir build --output-on-failure
 - [x] Stage 2 — TLS MITM interception, body capture, JSON parsing
 - [x] Stage 3 — Filter pipeline (PII redaction, chat history truncation)
 - [x] Stage 3 — In-memory LRU/TTL response cache with Prometheus metrics
-- [ ] Stage 4 — Config file (YAML/TOML), provider allowlist/denylist
-- [ ] Stage 4 — Redis cache backend for multi-process deployments
-- [ ] Stage 5 — Docker image, systemd unit, signed release builds
-- [ ] Stage 5 — HTTP/2 upstream support
-- [ ] Stage 5 — Plugin ABI for custom filter extensions
+- [x] Stage 4 — TOML config file, provider allowlist/denylist, --dump-config
+- [x] Stage 4 — Docker image + docker-compose, GitHub Actions CI (Linux + macOS)
+- [x] Stage 5 — Structured NDJSON logging (request ID, host, method, path, upstream_ms)
+- [x] Stage 5 — Admin API Bearer token auth (`--admin-token` / `admin.token` in TOML)
+- [x] Stage 5 — GitHub Releases workflow: binaries for linux-amd64, macos-arm64, macos-amd64 + SHA256SUMS
+- [x] Stage 5 — systemd unit file with hardening
+- [ ] Stage 6 — Redis cache backend for multi-process deployments
+- [ ] Stage 6 — HTTP/2 upstream support
+- [ ] Stage 6 — Plugin ABI for custom filter extensions
 
 ## Security model
 

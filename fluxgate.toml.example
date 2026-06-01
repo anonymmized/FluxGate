@@ -1,0 +1,51 @@
+# FluxGate configuration file
+# Copy to fluxgate.toml and adjust, then run: FluxGate --config fluxgate.toml
+# CLI flags always override file values.
+# Generate a fresh copy from current defaults: FluxGate --dump-config
+
+[proxy]
+listen  = "127.0.0.1"
+port    = 8080
+threads = 4             # 0 = auto-detect CPU count
+max_header_bytes   = 16384
+relay_buffer_bytes = 32768
+max_body_bytes     = 4194304  # 4 MB — bodies larger than this are not inspected
+
+[tls]
+# MITM TLS interception. Generate a CA first:
+#   FluxGate --generate-ca ./fluxgate-ca
+# Then install fluxgate-ca.cert.pem into your OS/browser trust store.
+enabled          = true
+ca_key           = "./fluxgate-ca.key.pem"
+ca_cert          = "./fluxgate-ca.cert.pem"
+leaf_cache_entries = 4096
+leaf_valid_days    = 7
+
+[filters]
+pii_redaction    = true   # strip email addresses and phone numbers
+max_chat_history = 20     # keep only the last N messages; 0 = unlimited
+
+[cache]
+enabled     = true
+max_entries = 4096
+ttl_seconds = 300   # 5 minutes
+
+[admin]
+enabled = true
+listen  = "127.0.0.1"
+port    = 9090
+# Endpoints:
+#   GET /healthz  → "ok"
+#   GET /metrics  → Prometheus text format
+
+[providers]
+# MITM only these hosts (empty = intercept all non-denied hosts).
+allowlist = [
+    "api.openai.com",
+    "api.anthropic.com",
+    "generativelanguage.googleapis.com",
+    "api.cohere.ai",
+    "api.mistral.ai",
+]
+# Never intercept these hosts regardless of allowlist.
+denylist = []

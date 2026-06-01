@@ -1,0 +1,19 @@
+services:
+  fluxgate:
+    build: .
+    image: fluxgate:latest
+    ports:
+      - "8080:8080"   # proxy
+      - "9090:9090"   # admin / metrics
+    volumes:
+      - ./certs:/certs:ro
+      - ./fluxgate.toml:/etc/fluxgate/config.toml:ro
+    command:
+      - --config
+      - /etc/fluxgate/config.toml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

@@ -11,6 +11,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 #include <string>
 #include <thread>
 
@@ -108,6 +109,55 @@ void test_config_mitm_requires_ca_paths() {
     assert(threw);
 }
 
+void test_config_provider_filtering() {
+    // allow + deny via CLI
+    const char* argv[] = {
+        "FluxGateTests",
+        "--allow", "api.openai.com",
+        "--allow", "api.anthropic.com",
+        "--deny", "internal.corp",
+    };
+    auto config = fluxgate::parse_args(static_cast<int>(std::size(argv)), const_cast<char**>(argv));
+    assert(config.provider_allowlist.size() == 2);
+    assert(config.provider_allowlist[0] == "api.openai.com");
+    assert(config.provider_allowlist[1] == "api.anthropic.com");
+    assert(config.provider_denylist.size() == 1);
+    assert(config.provider_denylist[0] == "internal.corp");
+}
+
+void test_config_dump_toml() {
+    fluxgate::AppConfig cfg;
+    cfg.provider_allowlist = {"api.openai.com", "api.anthropic.com"};
+    const auto toml = fluxgate::dump_config_toml(cfg);
+    assert(toml.find("[proxy]") != std::string::npos);
+    assert(toml.find("[tls]") != std::string::npos);
+    assert(toml.find("[filters]") != std::string::npos);
+    assert(toml.find("[cache]") != std::string::npos);
+    assert(toml.find("[providers]") != std::string::npos);
+    assert(toml.find("api.openai.com") != std::string::npos);
+}
+
+void test_config_file_toml(const std::string& tmpdir) {
+    // Write a minimal TOML config file and verify it loads correctly
+    const std::string path = tmpdir + "/fluxgate_test.toml";
+    {
+        std::ofstream f(path);
+        f << "[proxy]\nlisten = \"127.0.0.1\"\nport = 9999\n"
+          << "[filters]\npii_redaction = false\nmax_chat_history = 5\n"
+          << "[providers]\nallowlist = [\"api.openai.com\"]\ndenylist = [\"bad.host\"]\n";
+    }
+    const char* argv[] = {"FluxGateTests", "--config", path.c_str()};
+    auto config = fluxgate::parse_args(static_cast<int>(std::size(argv)), const_cast<char**>(argv));
+    assert(config.listen_host == "127.0.0.1");
+    assert(config.listen_port == 9999);
+    assert(!config.enable_pii_redaction);
+    assert(config.max_chat_history == 5);
+    assert(config.provider_allowlist.size() == 1);
+    assert(config.provider_allowlist[0] == "api.openai.com");
+    assert(config.provider_denylist.size() == 1);
+    assert(config.provider_denylist[0] == "bad.host");
+}
+
 void test_metrics() {
     fluxgate::Metrics metrics;
     metrics.on_session_accepted();
@@ -183,6 +233,9 @@ int main() {
     test_cache();
     test_config_mitm_args();
     test_config_mitm_requires_ca_paths();
+    test_config_provider_filtering();
+    test_config_dump_toml();
+    test_config_file_toml("/tmp");
     test_metrics();
     test_certificate_authority();
     test_leaf_certificate_cache();
