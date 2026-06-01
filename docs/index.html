@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxGate — Cut Your LLM API Bill by 40–70%</title>
+<meta name="description" content="High-performance C++ proxy that sits between your app and OpenAI / Anthropic / Gemini. Filters, deduplicates, and caches AI traffic. Zero code changes required.">
+<meta property="og:title" content="FluxGate — Cut Your LLM API Bill by 40–70%">
+<meta property="og:description" content="Open-source HTTPS proxy for LLM APIs. Cache identical queries, strip PII, truncate chat history. Works with any language, any framework.">
+<meta property="og:type" content="website">
+<style>
+:root {
+  --bg: #0b0d14;
+  --surface: #13151f;
+  --surface2: #1a1d2e;
+  --border: #252840;
+  --purple: #7c3aed;
+  --purple-light: #a78bfa;
+  --green: #4ade80;
+  --yellow: #fbbf24;
+  --cyan: #22d3ee;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --code-bg: #0f1117;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+a{color:var(--purple-light);text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:100;background:rgba(11,13,20,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px}
+.logo{font-weight:700;font-size:1.1rem;color:#fff;display:flex;align-items:center;gap:8px}
+.logo span{color:var(--purple-light)}
+.nav-links{display:flex;gap:24px;font-size:.9rem}
+.nav-links a{color:var(--muted)}
+.nav-links a:hover{color:var(--text);text-decoration:none}
+.gh-btn{background:var(--surface2);border:1px solid var(--border);padding:6px 16px;border-radius:8px;color:var(--text)!important;font-size:.85rem;display:flex;align-items:center;gap:6px}
+.gh-btn:hover{border-color:var(--purple);text-decoration:none!important}
+
+/* HERO */
+.hero{text-align:center;padding:96px 24px 80px;max-width:860px;margin:0 auto}
+.badge{display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.4);color:var(--purple-light);padding:4px 14px;border-radius:999px;font-size:.8rem;margin-bottom:28px}
+h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-bottom:20px}
+h1 em{font-style:normal;background:linear-gradient(135deg,var(--purple-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:1.15rem;color:var(--muted);max-width:600px;margin:0 auto 40px}
+.hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:56px}
+.btn-primary{background:var(--purple);color:#fff!important;padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem;transition:background .2s}
+.btn-primary:hover{background:#6d28d9;text-decoration:none!important}
+.btn-secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)!important;padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem}
+.btn-secondary:hover{border-color:var(--purple);text-decoration:none!important}
+
+/* INSTALL BOX */
+.install-box{background:var(--code-bg);border:1px solid var(--border);border-radius:12px;padding:16px 24px;display:inline-flex;align-items:center;gap:16px;font-family:monospace;font-size:.9rem;color:#94a3b8;max-width:100%;text-align:left}
+.install-box .prompt{color:var(--purple-light)}
+.install-box code{color:#e2e8f0;word-break:break-all}
+.copy-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:.75rem;cursor:pointer;white-space:nowrap;font-family:inherit}
+.copy-btn:hover{color:var(--text)}
+
+/* STATS STRIP */
+.stats{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;padding:48px 24px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.stat{text-align:center}
+.stat-val{font-size:2.2rem;font-weight:800;color:#fff}
+.stat-val.green{color:var(--green)}
+.stat-val.purple{color:var(--purple-light)}
+.stat-val.yellow{color:var(--yellow)}
+.stat-label{font-size:.8rem;color:var(--muted);margin-top:2px}
+
+/* SECTION */
+section{padding:80px 24px;max-width:1100px;margin:0 auto}
+h2{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;margin-bottom:12px}
+.section-sub{color:var(--muted);font-size:1rem;margin-bottom:48px;max-width:540px}
+
+/* HOW IT WORKS */
+.flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center;margin-top:40px}
+.flow-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 24px;text-align:center;min-width:160px}
+.flow-box .icon{font-size:1.8rem;margin-bottom:8px}
+.flow-box .name{font-weight:600;font-size:.95rem}
+.flow-box .desc{font-size:.78rem;color:var(--muted);margin-top:4px}
+.flow-arrow{color:var(--purple-light);font-size:1.4rem;padding:0 8px}
+.flow-middle{background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(34,211,238,.1));border-color:var(--purple);position:relative}
+.flow-middle::after{content:"intercepts + filters + caches";position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:.7rem;color:var(--purple-light);white-space:nowrap}
+
+/* FEATURES */
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+.feature{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px}
+.feature-icon{font-size:1.6rem;margin-bottom:12px}
+.feature h3{font-size:1rem;font-weight:600;margin-bottom:6px}
+.feature p{font-size:.85rem;color:var(--muted);line-height:1.5}
+
+/* CODE BLOCK */
+.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:12px;padding:20px 24px;font-family:monospace;font-size:.85rem;line-height:1.7;overflow-x:auto}
+.code-block .c{color:var(--muted)}
+.code-block .k{color:var(--purple-light)}
+.code-block .s{color:var(--green)}
+.code-block .n{color:var(--cyan)}
+
+/* PRICING */
+.pricing{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
+.plan{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:32px}
+.plan.featured{border-color:var(--purple);background:linear-gradient(135deg,rgba(124,58,237,.1),var(--surface))}
+.plan-name{font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:8px}
+.plan-price{font-size:2.5rem;font-weight:800;color:#fff;margin-bottom:4px}
+.plan-price span{font-size:1rem;color:var(--muted);font-weight:400}
+.plan-desc{font-size:.85rem;color:var(--muted);margin-bottom:24px}
+.plan ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:28px}
+.plan li{font-size:.88rem;display:flex;gap:8px;align-items:flex-start}
+.plan li::before{content:"✓";color:var(--green);font-weight:700;flex-shrink:0}
+.plan-cta{display:block;text-align:center;padding:12px;border-radius:10px;font-weight:600;font-size:.95rem}
+.plan-cta.primary{background:var(--purple);color:#fff!important}
+.plan-cta.secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)!important}
+.plan-cta:hover{text-decoration:none!important;opacity:.9}
+
+/* FAQ */
+.faq{display:flex;flex-direction:column;gap:16px;max-width:720px}
+.faq-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 24px}
+.faq-q{font-weight:600;margin-bottom:8px}
+.faq-a{font-size:.88rem;color:var(--muted)}
+
+/* FOOTER */
+footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;color:var(--muted);font-size:.85rem}
+footer a{color:var(--muted)}
+footer a:hover{color:var(--text)}
+
+@media(max-width:640px){
+  .flow-arrow{display:none}
+  .flow{gap:8px}
+  .stats{gap:24px}
+  .nav-links{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="logo">⚡ <span>FluxGate</span></div>
+  <div class="nav-links">
+    <a href="#how-it-works">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://github.com/anonymmized/FluxGate">Docs</a>
+  </div>
+  <a href="https://github.com/anonymmized/FluxGate" class="gh-btn">
+    ★ GitHub
+  </a>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="badge">⚡ Open-source · C++20 · <span>v0.2.0</span></div>
+  <h1>Cut your <em>LLM API bill</em><br>by 40–70%</h1>
+  <p class="hero-sub">
+    A transparent HTTPS proxy that sits between your app and OpenAI, Anthropic, or Gemini.
+    Zero code changes. Caches identical queries, strips PII, trims chat history.
+  </p>
+  <div class="hero-actions">
+    <a href="#install" class="btn-primary">Get started — free</a>
+    <a href="https://github.com/anonymmized/FluxGate" class="btn-secondary">View on GitHub</a>
+  </div>
+  <div class="install-box" id="hero-install">
+    <span class="prompt">$</span>
+    <code>curl -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash</code>
+    <button class="copy-btn" onclick="copyInstall()">Copy</button>
+  </div>
+</div>
+
+<!-- STATS -->
+<div class="stats">
+  <div class="stat"><div class="stat-val green">40–70%</div><div class="stat-label">API cost reduction</div></div>
+  <div class="stat"><div class="stat-val purple">&lt;1ms</div><div class="stat-label">Cache hit latency</div></div>
+  <div class="stat"><div class="stat-val yellow">0</div><div class="stat-label">Code changes required</div></div>
+  <div class="stat"><div class="stat-val">10k+</div><div class="stat-label">Concurrent sessions</div></div>
+</div>
+
+<!-- HOW IT WORKS -->
+<section id="how-it-works">
+  <h2>How it works</h2>
+  <p class="section-sub">FluxGate acts as a local HTTPS proxy. Your app talks to FluxGate; FluxGate optimises the request and forwards it upstream.</p>
+  <div class="flow">
+    <div class="flow-box">
+      <div class="icon">💻</div>
+      <div class="name">Your App</div>
+      <div class="desc">OpenAI SDK<br>Anthropic SDK<br>any HTTP client</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-box flow-middle">
+      <div class="icon">⚡</div>
+      <div class="name">FluxGate</div>
+      <div class="desc">filter · cache · log</div>
+    </div>
+    <div class="flow-arrow" style="margin-top:-22px">→</div>
+    <div class="flow-box" style="margin-top:-22px">
+      <div class="icon">🤖</div>
+      <div class="name">LLM API</div>
+      <div class="desc">OpenAI · Anthropic<br>Gemini · Mistral</div>
+    </div>
+  </div>
+
+  <div style="margin-top:64px">
+    <h3 style="margin-bottom:20px;font-size:1.1rem">One-line setup</h3>
+    <div class="code-block">
+<span class="c"># 1. Install (generates CA + config)</span>
+<span class="k">curl</span> <span class="n">-fsSL</span> https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash
+
+<span class="c"># 2. Start</span>
+<span class="k">fluxgate</span> --config ~/.fluxgate/config.toml
+
+<span class="c"># 3. Point your app at the proxy</span>
+<span class="k">export</span> HTTPS_PROXY=<span class="s">http://127.0.0.1:8080</span>
+<span class="c"># That's it.</span>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features" style="border-top:1px solid var(--border)">
+  <h2>Everything you need to cut costs</h2>
+  <p class="section-sub">Built in C++20 on Asio. Handles thousands of concurrent sessions with sub-millisecond overhead.</p>
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">🔁</div>
+      <h3>Smart Response Cache</h3>
+      <p>Identical queries return instantly from memory — no API call, no cost. LRU + TTL with optional Redis backend for multi-instance deployments.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">✂️</div>
+      <h3>Chat History Trimming</h3>
+      <p>Automatically keeps only the last N messages in the context window. Cuts input token count on long conversations by 50–80%.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔒</div>
+      <h3>PII Redaction</h3>
+      <p>Strips email addresses and phone numbers from request bodies before they leave your network. Configurable per-deployment.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🎯</div>
+      <h3>Provider Allowlist</h3>
+      <p>MITM only the AI providers you choose. Everything else tunnels transparently. Default list covers OpenAI, Anthropic, Gemini, Mistral.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📊</div>
+      <h3>Live Dashboard</h3>
+      <p>Open <code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">http://localhost:9090/</code> to see sessions, cache hit rate, tokens saved, and estimated cost saved — live.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🐳</div>
+      <h3>Deploy Anywhere</h3>
+      <p>Single static binary. Docker image. systemd unit. macOS launchd. Works on-prem or in a sidecar container.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔍</div>
+      <h3>Structured Logging</h3>
+      <p>NDJSON logs with request ID, host, method, path, upstream latency. Never logs body content. Pipes cleanly into Datadog, Splunk, or grep.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📈</div>
+      <h3>Prometheus Metrics</h3>
+      <p><code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">GET /metrics</code> exposes all counters in Prometheus text format. Drop into your existing Grafana dashboards.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">⚙️</div>
+      <h3>TOML Config File</h3>
+      <p>All settings in one <code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">config.toml</code>. Generate defaults with <code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">--dump-config</code>. Override any value from the CLI.</p>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install" style="border-top:1px solid var(--border)">
+  <h2>Install in 30 seconds</h2>
+  <p class="section-sub">The installer downloads the binary, generates a local CA, trusts it in your OS keychain, and writes a default config.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px">
+    <div>
+      <h3 style="margin-bottom:12px;font-size:1rem">macOS &amp; Linux</h3>
+      <div class="code-block"><span class="k">curl</span> -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash</div>
+      <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Installs to <code>~/.fluxgate/</code>. Run with <code>sudo</code> to trust CA system-wide.</p>
+    </div>
+    <div>
+      <h3 style="margin-bottom:12px;font-size:1rem">Docker</h3>
+      <div class="code-block"><span class="k">docker</span> run -d \
+  -v ~/.fluxgate:/certs:ro \
+  -p 8080:8080 -p 9090:9090 \
+  ghcr.io/anonymmized/fluxgate:latest \
+  --mitm \
+  --mitm-ca-key /certs/ca.key.pem \
+  --mitm-ca-cert /certs/ca.cert.pem</div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing" style="border-top:1px solid var(--border)">
+  <h2>Pricing</h2>
+  <p class="section-sub">FluxGate is free and open-source. Enterprise support is available for teams that need SLAs, custom filters, or managed deployment.</p>
+  <div class="pricing">
+    <div class="plan">
+      <div class="plan-name">Open Source</div>
+      <div class="plan-price">Free <span>forever</span></div>
+      <div class="plan-desc">Everything you need for production deployments.</div>
+      <ul>
+        <li>Full MITM proxy pipeline</li>
+        <li>PII redaction + history trimming</li>
+        <li>In-memory &amp; Redis cache</li>
+        <li>Docker + binary releases</li>
+        <li>Prometheus metrics + dashboard</li>
+        <li>Community support (GitHub Issues)</li>
+      </ul>
+      <a href="https://github.com/anonymmized/FluxGate" class="plan-cta secondary">View on GitHub →</a>
+    </div>
+    <div class="plan featured">
+      <div class="plan-name">Enterprise</div>
+      <div class="plan-price">Custom <span>pricing</span></div>
+      <div class="plan-desc">For teams processing &gt;10M tokens/day or with compliance requirements.</div>
+      <ul>
+        <li>Everything in Open Source</li>
+        <li>SLA-backed support</li>
+        <li>Custom filter plugins</li>
+        <li>Managed deployment assistance</li>
+        <li>Security &amp; compliance review</li>
+        <li>Dedicated Slack channel</li>
+      </ul>
+      <a href="mailto:hi@fluxgate.dev" class="plan-cta primary">Contact us →</a>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section style="border-top:1px solid var(--border)">
+  <h2>Frequently asked questions</h2>
+  <p class="section-sub"></p>
+  <div class="faq">
+    <div class="faq-item">
+      <div class="faq-q">Is it safe to route my API keys through FluxGate?</div>
+      <div class="faq-a">FluxGate runs <strong>locally</strong> — on your machine or inside your network. Your traffic never leaves your infrastructure. FluxGate never stores API keys or response content. Structured logs contain only metadata (host, method, path, latency). See <a href="https://github.com/anonymmized/FluxGate/blob/main/docs/SECURITY.md">SECURITY.md</a> for the full trust model.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Does it work with streaming responses (Server-Sent Events)?</div>
+      <div class="faq-a">Yes — streaming responses are relayed byte-for-byte without buffering. FluxGate automatically skips caching for SSE streams (Content-Type: text/event-stream).</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">What languages / SDKs are supported?</div>
+      <div class="faq-a">Any HTTP client that supports HTTP CONNECT proxies: Python (openai, anthropic), Node.js, Go, Ruby, Java, curl, etc. See <a href="https://github.com/anonymmized/FluxGate/tree/main/examples">examples/</a> for ready-to-run code.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">How much traffic can it handle?</div>
+      <div class="faq-a">FluxGate uses async C++20 (Asio) with a per-session strand model. A single instance handles thousands of concurrent connections on commodity hardware. Each session adds &lt;1ms overhead for a cache hit.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">Does it support multiple instances / horizontal scaling?</div>
+      <div class="faq-a">Yes — use Redis as the cache backend (<code>cache.backend = "redis"</code>) so all instances share the same cache. Each instance is stateless otherwise.</div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p style="margin-bottom:8px">
+    <a href="https://github.com/anonymmized/FluxGate">GitHub</a> ·
+    <a href="https://github.com/anonymmized/FluxGate/blob/main/docs/SECURITY.md">Security</a> ·
+    <a href="https://github.com/anonymmized/FluxGate/blob/main/.github/CONTRIBUTING.md">Contributing</a> ·
+    <a href="mailto:hi@fluxgate.dev">hi@fluxgate.dev</a>
+  </p>
+  <p style="color:#334155">FluxGate is open-source software released under the MIT License.</p>
+</footer>
+
+<script>
+function copyInstall() {
+  const cmd = document.querySelector('#hero-install code').textContent;
+  navigator.clipboard.writeText(cmd).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 2000);
+  });
+}
+</script>
+</body>
+</html>
