@@ -16,6 +16,7 @@ struct MetricsSnapshot {
     std::uint64_t cache_hits = 0;
     std::uint64_t cache_misses = 0;
     std::uint64_t filtered_requests = 0;
+    std::uint64_t estimated_tokens_saved = 0;
 };
 
 class Metrics {
@@ -29,6 +30,7 @@ public:
     void on_cache_hit();
     void on_cache_miss();
     void on_request_filtered();
+    void add_estimated_tokens_saved(std::uint64_t tokens);
     MetricsSnapshot snapshot() const;
 
 private:
@@ -41,8 +43,10 @@ private:
     std::atomic_uint64_t cache_hits_{0};
     std::atomic_uint64_t cache_misses_{0};
     std::atomic_uint64_t filtered_requests_{0};
+    std::atomic_uint64_t estimated_tokens_saved_{0};
 };
 
 std::string to_prometheus_text(const MetricsSnapshot& snapshot);
+std::string to_json(const MetricsSnapshot& snapshot);
 
 } // namespace fluxgate

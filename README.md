@@ -122,12 +122,16 @@ curl --proxy http://127.0.0.1:8080 https://api.openai.com/v1/chat/completions ..
 
 ## Admin endpoints
 
-```sh
-curl http://127.0.0.1:9090/healthz   # → "ok"
-curl http://127.0.0.1:9090/metrics   # → Prometheus text format
-```
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | **Live web dashboard** — sessions, cache hit rate, tokens/cost saved |
+| `GET /healthz` | `ok` — for load balancer probes |
+| `GET /metrics` | Prometheus text format |
+| `GET /stats` | JSON snapshot of all metrics |
 
-Metrics include: sessions accepted/active/rejected, bytes relayed, cache hits/misses, filtered requests, upstream failures.
+Open `http://127.0.0.1:9090/` in your browser after starting FluxGate to see the live dashboard.
+
+Metrics tracked: sessions, bytes relayed, cache hits/misses, filtered requests, **estimated tokens saved**, **estimated cost saved** (at $5/1M tokens gpt-4o pricing).
 
 ## Architecture
 
