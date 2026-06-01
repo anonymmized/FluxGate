@@ -1,5 +1,6 @@
 #include "fluxgate/metrics.h"
 
+#include <iomanip>
 #include <sstream>
 
 namespace fluxgate {
@@ -44,6 +45,10 @@ void Metrics::on_request_filtered() {
     filtered_requests_.fetch_add(1, std::memory_order_relaxed);
 }
 
+void Metrics::add_estimated_tokens_saved(std::uint64_t tokens) {
+    estimated_tokens_saved_.fetch_add(tokens, std::memory_order_relaxed);
+}
+
 MetricsSnapshot Metrics::snapshot() const {
     return {
         .accepted_sessions = accepted_sessions_.load(std::memory_order_relaxed),
@@ -55,6 +60,7 @@ MetricsSnapshot Metrics::snapshot() const {
         .cache_hits = cache_hits_.load(std::memory_order_relaxed),
         .cache_misses = cache_misses_.load(std::memory_order_relaxed),
         .filtered_requests = filtered_requests_.load(std::memory_order_relaxed),
+        .estimated_tokens_saved = estimated_tokens_saved_.load(std::memory_order_relaxed),
     };
 }
 
@@ -78,7 +84,34 @@ std::string to_prometheus_text(const MetricsSnapshot& snapshot) {
     out << "fluxgate_cache_misses_total " << snapshot.cache_misses << '\n';
     out << "# TYPE fluxgate_filtered_requests_total counter\n";
     out << "fluxgate_filtered_requests_total " << snapshot.filtered_requests << '\n';
+    out << "# TYPE fluxgate_estimated_tokens_saved_total counter\n";
+    out << "fluxgate_estimated_tokens_saved_total " << snapshot.estimated_tokens_saved << '\n';
     return out.str();
+}
+
+std::string to_json(const MetricsSnapshot& s) {
+    const double hit_rate = (s.cache_hits + s.cache_misses > 0)
+        ? 100.0 * s.cache_hits / (s.cache_hits + s.cache_misses) : 0.0;
+    // Rough cost saving: gpt-4o input ~$5 / 1M tokens
+    const double cost_saved_usd = s.estimated_tokens_saved * 5.0 / 1'000'000.0;
+
+    std::ostringstream o;
+    o << std::fixed;
+    o << "{"
+      << "\"accepted_sessions\":"   << s.accepted_sessions   << ","
+      << "\"active_sessions\":"     << s.active_sessions     << ","
+      << "\"rejected_sessions\":"   << s.rejected_sessions   << ","
+      << "\"upstream_failures\":"   << s.upstream_connect_failures << ","
+      << "\"bytes_in\":"            << s.client_to_upstream_bytes  << ","
+      << "\"bytes_out\":"           << s.upstream_to_client_bytes  << ","
+      << "\"cache_hits\":"          << s.cache_hits          << ","
+      << "\"cache_misses\":"        << s.cache_misses        << ","
+      << "\"cache_hit_rate\":"      << std::setprecision(1) << hit_rate << ","
+      << "\"filtered_requests\":"   << s.filtered_requests   << ","
+      << "\"estimated_tokens_saved\":" << s.estimated_tokens_saved << ","
+      << "\"estimated_cost_saved_usd\":" << std::setprecision(4) << cost_saved_usd
+      << "}";
+    return o.str();
 }
 
 } // namespace fluxgate

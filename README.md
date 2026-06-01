@@ -122,12 +122,16 @@ curl --proxy http://127.0.0.1:8080 https://api.openai.com/v1/chat/completions ..
 
 ## Admin endpoints
 
-```sh
-curl http://127.0.0.1:9090/healthz   # → "ok"
-curl http://127.0.0.1:9090/metrics   # → Prometheus text format
-```
+| Endpoint | Description |
+|----------|-------------|
+| `GET /` | **Live web dashboard** — sessions, cache hit rate, tokens/cost saved |
+| `GET /healthz` | `ok` — for load balancer probes |
+| `GET /metrics` | Prometheus text format |
+| `GET /stats` | JSON snapshot of all metrics |
 
-Metrics include: sessions accepted/active/rejected, bytes relayed, cache hits/misses, filtered requests, upstream failures.
+Open `http://127.0.0.1:9090/` in your browser after starting FluxGate to see the live dashboard.
+
+Metrics tracked: sessions, bytes relayed, cache hits/misses, filtered requests, **estimated tokens saved**, **estimated cost saved** (at $5/1M tokens gpt-4o pricing).
 
 ## Architecture
 
@@ -168,6 +172,8 @@ ctest --test-dir build --output-on-failure
 - [x] Stage 5 — systemd unit file with hardening
 - [x] Stage 6 — Redis cache backend (`--redis-url` / `cache.backend = "redis"`, `-DFLUXGATE_REDIS=ON`)
 - [x] Stage 6 — Integration tests: real end-to-end tunnel + MITM filter+cache round-trip
+- [x] Stage 6 — Live web dashboard on admin port (`GET /`), `/stats` JSON endpoint
+- [x] Stage 6 — Estimated tokens saved + cost saved metrics; examples for OpenAI/Anthropic
 - [ ] Stage 7 — HTTP/2 upstream support
 - [ ] Stage 7 — Plugin ABI for custom filter extensions
 

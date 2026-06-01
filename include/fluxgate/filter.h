@@ -18,6 +18,7 @@ struct FilterResult {
     bool modified = false;
     bool rejected = false;
     std::string reject_reason;
+    std::size_t estimated_tokens_removed = 0;  // rough estimate: chars/4
 };
 
 class TrafficFilter {
