@@ -7,14 +7,17 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-24.04
             artifact: fluxgate-linux-amd64
           - os: macos-14
             artifact: fluxgate-macos-arm64
-          - os: macos-13
-            artifact: fluxgate-macos-amd64
+          # Intel macOS (macos-13) runners are frequently unavailable and stall
+          # the whole release. Apple Silicon + Linux cover the vast majority;
+          # Intel Mac users can build from source. Re-add if runner supply
+          # improves.
 
     runs-on: ${{ matrix.os }}
 
@@ -77,5 +80,4 @@ jobs:
           files: |
             dist/fluxgate-linux-amd64
             dist/fluxgate-macos-arm64
-            dist/fluxgate-macos-amd64
             dist/SHA256SUMS.txt
