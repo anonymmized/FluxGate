@@ -66,6 +66,8 @@ AppConfig load_config_file(const std::string& path) {
         if (auto v = (*cache)["enabled"].value<bool>()) cfg.enable_cache = *v;
         if (auto v = (*cache)["max_entries"].value<int64_t>()) cfg.cache_max_entries = static_cast<std::size_t>(*v);
         if (auto v = (*cache)["ttl_seconds"].value<int64_t>()) cfg.cache_ttl_seconds = static_cast<std::size_t>(*v);
+        if (auto v = (*cache)["backend"].value<std::string>()) cfg.cache_backend = *v;
+        if (auto v = (*cache)["redis_url"].value<std::string>()) cfg.redis_url = *v;
     }
 
     if (auto admin = tbl["admin"].as_table()) {
@@ -142,6 +144,11 @@ AppConfig parse_args(int argc, char* argv[]) {
             config.cache_max_entries = parse_size(require_value(arg), "cache max entries");
         } else if (arg == "--cache-ttl") {
             config.cache_ttl_seconds = parse_size(require_value(arg), "cache TTL seconds");
+        } else if (arg == "--cache-backend") {
+            config.cache_backend = std::string(require_value(arg));
+        } else if (arg == "--redis-url") {
+            config.redis_url = std::string(require_value(arg));
+            config.cache_backend = "redis";
         } else if (arg == "--max-body") {
             config.max_body_bytes = parse_size(require_value(arg), "max body bytes");
         } else if (arg == "--no-pii") {
@@ -233,8 +240,10 @@ std::string dump_config_toml(const AppConfig& c) {
         << "max_chat_history = " << c.max_chat_history << "\n\n"
         << "[cache]\n"
         << "enabled     = " << (c.enable_cache ? "true" : "false") << "\n"
+        << "backend     = \"" << c.cache_backend << "\"  # \"memory\" or \"redis\"\n"
         << "max_entries = " << c.cache_max_entries << "\n"
-        << "ttl_seconds = " << c.cache_ttl_seconds << "\n\n"
+        << "ttl_seconds = " << c.cache_ttl_seconds << "\n"
+        << "# redis_url = \"redis://127.0.0.1:6379\"  # used when backend = \"redis\"\n\n"
         << "[admin]\n"
         << "enabled = " << (c.enable_admin ? "true" : "false") << "\n"
         << "listen  = \"" << c.admin_host << "\"\n"

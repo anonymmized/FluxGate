@@ -1,6 +1,10 @@
 #include "fluxgate/proxy_server.h"
 
 #include "fluxgate/cache.h"
+#include "fluxgate/icache.h"
+#ifdef FLUXGATE_HAS_REDIS
+#include "fluxgate/redis_cache.h"
+#endif
 #include "fluxgate/connect_parser.h"
 #include "fluxgate/filter.h"
 #include "fluxgate/http_message.h"
@@ -83,7 +87,7 @@ public:
         AppConfig config,
         std::shared_ptr<Metrics> metrics,
         SharedMitmServices mitm_services,
-        std::shared_ptr<MemoryCache> cache,
+        std::shared_ptr<ICache> cache,
         std::shared_ptr<FilterPipeline> filter_pipeline,
         std::uint64_t id)
         : client_socket_(std::move(client_socket)),
@@ -523,7 +527,7 @@ private:
     AppConfig config_;
     std::shared_ptr<Metrics> metrics_;
     SharedMitmServices mitm_services_;
-    std::shared_ptr<MemoryCache> cache_;
+    std::shared_ptr<ICache> cache_;
     std::shared_ptr<FilterPipeline> filter_pipeline_;
     std::vector<char> client_to_upstream_;
     std::vector<char> upstream_to_client_;
@@ -556,8 +560,27 @@ ProxyServer::ProxyServer(asio::io_context& io_context, AppConfig config, SharedM
     if (config_.max_chat_history > 0)
         filter_pipeline_->add(std::make_unique<ChatHistoryLimitFilter>(config_.max_chat_history));
 
-    if (config_.enable_cache)
-        cache_ = std::make_shared<MemoryCache>(config_.cache_max_entries);
+    if (config_.enable_cache) {
+        if (config_.cache_backend == "redis") {
+#ifdef FLUXGATE_HAS_REDIS
+            auto rc = std::make_shared<RedisCache>(config_.redis_url);
+            if (rc->connected()) {
+                cache_ = std::move(rc);
+                Logger::instance().info("cache backend: redis at " + config_.redis_url);
+            } else {
+                Logger::instance().warn("redis unavailable, falling back to memory cache");
+                cache_ = std::make_shared<MemoryCache>(config_.cache_max_entries);
+            }
+#else
+            Logger::instance().warn("built without Redis support, using memory cache");
+            cache_ = std::make_shared<MemoryCache>(config_.cache_max_entries);
+#endif
+        } else {
+            cache_ = std::make_shared<MemoryCache>(config_.cache_max_entries);
+            Logger::instance().info("cache backend: memory (max_entries="
+                + std::to_string(config_.cache_max_entries) + ")");
+        }
+    }
 
     tcp::resolver resolver(io_context);
     const auto endpoints = resolver.resolve(config_.listen_host, std::to_string(config_.listen_port));
