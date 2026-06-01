@@ -153,7 +153,8 @@ private:
     }
 
     void accept_tunnel() {
-        static constexpr char response[] = "HTTP/1.1 200 Connection Established\r\n\r\n";
+        // Use string_view to exclude null terminator from asio::buffer.
+        static constexpr std::string_view response = "HTTP/1.1 200 Connection Established\r\n\r\n";
         asio::async_write(client_socket_, asio::buffer(response),
             asio::bind_executor(strand_,
                 [this, self = shared_from_this()](std::error_code ec, std::size_t) {
@@ -243,7 +244,8 @@ private:
     // ── MITM path ────────────────────────────────────────────────────────────
 
     void accept_mitm_tunnel() {
-        static constexpr char response[] = "HTTP/1.1 200 Connection Established\r\n\r\n";
+        // Use string_view to exclude null terminator from asio::buffer.
+        static constexpr std::string_view response = "HTTP/1.1 200 Connection Established\r\n\r\n";
         asio::async_write(client_socket_, asio::buffer(response),
             asio::bind_executor(strand_,
                 [this, self = shared_from_this()](std::error_code ec, std::size_t) {
@@ -260,7 +262,11 @@ private:
         client_ssl_->async_handshake(asio::ssl::stream_base::server,
             asio::bind_executor(strand_,
                 [this, self = shared_from_this()](std::error_code ec) {
-                    if (ec) return;
+                    if (ec) {
+                        Logger::instance().warn("client TLS handshake failed ["
+                            + target_.host + "]: " + ec.message());
+                        return;
+                    }
                     Logger::instance().info(
                         "mitm tls established for " + target_.host + ':' + target_.port);
                     read_mitm_http_head();
@@ -366,7 +372,20 @@ private:
 
     void connect_mitm_upstream(HttpRequestHead request, std::string body) {
         upstream_ssl_ctx_ = std::make_shared<asio::ssl::context>(asio::ssl::context::tls_client);
-        upstream_ssl_ctx_->set_default_verify_paths();
+        // Try well-known CA bundle paths (macOS homebrew + Linux).
+        // Fall back to set_default_verify_paths if none found.
+        bool ca_loaded = false;
+        for (const auto* path : {"/etc/ssl/cert.pem",
+                                  "/opt/homebrew/etc/ca-certificates/cert.pem",
+                                  "/usr/local/etc/openssl@3/cert.pem",
+                                  "/usr/local/etc/openssl/cert.pem",
+                                  "/etc/pki/tls/certs/ca-bundle.crt",
+                                  "/etc/ssl/certs/ca-certificates.crt"}) {
+            std::error_code ec;
+            upstream_ssl_ctx_->load_verify_file(path, ec);
+            if (!ec) { ca_loaded = true; break; }
+        }
+        if (!ca_loaded) upstream_ssl_ctx_->set_default_verify_paths();
         upstream_ssl_ctx_->set_verify_mode(asio::ssl::verify_peer);
 
         upstream_ssl_ = std::make_shared<asio::ssl::stream<tcp::socket>>(
