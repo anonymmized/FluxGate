@@ -374,6 +374,9 @@ private:
 
         SSL_set_tlsext_host_name(upstream_ssl_->native_handle(), target_.host.c_str());
         upstream_ssl_->set_verify_callback(asio::ssl::host_name_verification(target_.host));
+        // Force HTTP/1.1 — we don't support h2 framing yet.
+        static const unsigned char h11[] = {8,'h','t','t','p','/','1','.','1'};
+        SSL_set_alpn_protos(upstream_ssl_->native_handle(), h11, sizeof(h11));
 
         resolver_.async_resolve(target_.host, target_.port,
             asio::bind_executor(strand_,

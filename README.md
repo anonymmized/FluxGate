@@ -33,7 +33,20 @@ FluxGate terminates TLS from your client (MITM with a local CA you generate your
 
 ## Quick start
 
-### Option A — Docker (recommended)
+### Option A — One-line installer (recommended)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash
+```
+
+Downloads the latest binary, generates a local CA, trusts it in your OS keychain, and writes `~/.fluxgate/config.toml`. Then:
+
+```sh
+~/.fluxgate/fluxgate --config ~/.fluxgate/config.toml
+export HTTPS_PROXY=http://127.0.0.1:8080   # point your app at the proxy
+```
+
+### Option C — Docker
 
 ```sh
 # Generate CA (one-time setup)
