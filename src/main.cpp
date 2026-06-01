@@ -1,6 +1,7 @@
 #include "fluxgate/admin_server.h"
 #include "fluxgate/cert_authority.h"
 #include "fluxgate/config.h"
+#include "fluxgate/logger.h"
 #include "fluxgate/mitm_services.h"
 #include "fluxgate/proxy_server.h"
 
@@ -33,6 +34,7 @@ std::string read_file(const std::string& path) {
 int main(int argc, char* argv[]) {
     try {
         auto config = fluxgate::parse_args(argc, argv);
+        fluxgate::Logger::instance().set_json(true);
         if (config.generate_ca_prefix) {
             const auto ca = fluxgate::CertificateAuthority::create_self_signed(config.ca_common_name, config.ca_valid_days);
             const auto pem = ca.pem();
@@ -75,15 +77,19 @@ int main(int argc, char* argv[]) {
         });
 
         fluxgate::ProxyServer server(io_context, config, mitm_services);
-        std::cout << "FluxGate CONNECT gateway listening on " << config.listen_host << ':'
-                  << config.listen_port << " with " << config.worker_threads << " worker(s)" << '\n';
+        fluxgate::Logger::instance().info(
+            "FluxGate listening on " + config.listen_host + ':' + std::to_string(config.listen_port)
+            + " threads=" + std::to_string(config.worker_threads)
+            + (config.enable_mitm ? " mitm=on" : " mitm=off"));
 
         std::unique_ptr<fluxgate::AdminServer> admin_server;
         if (config.enable_admin) {
             admin_server = std::make_unique<fluxgate::AdminServer>(
-                io_context, config.admin_host, config.admin_port, server.shared_metrics());
-            std::cout << "FluxGate admin endpoint listening on " << config.admin_host << ':'
-                      << config.admin_port << '\n';
+                io_context, config.admin_host, config.admin_port,
+                server.shared_metrics(), config.admin_token);
+            fluxgate::Logger::instance().info(
+                "admin endpoint on " + config.admin_host + ':' + std::to_string(config.admin_port)
+                + (config.admin_token.empty() ? " (no auth)" : " (Bearer auth)"));
         }
 
         std::vector<std::thread> workers;

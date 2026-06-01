@@ -36,6 +36,7 @@ add_library(FluxGateCore
     src/filter.cpp
     src/http_message.cpp
     src/leaf_certificate_cache.cpp
+    src/logger.cpp
     src/metrics.cpp
     src/mitm_tls.cpp
     src/proxy_server.cpp

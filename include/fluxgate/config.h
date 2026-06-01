@@ -43,6 +43,8 @@ struct AppConfig {
     std::vector<std::string> provider_denylist;
     // Path to TOML config file (loaded before CLI args, CLI args override file).
     std::optional<std::string> config_file;
+    // If set, admin endpoint requires "Authorization: Bearer <token>".
+    std::string admin_token;
 };
 
 AppConfig parse_args(int argc, char* argv[]);

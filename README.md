@@ -112,6 +112,7 @@ curl --proxy http://127.0.0.1:8080 https://api.openai.com/v1/chat/completions ..
 | `--deny host` | — | Add host to MITM denylist (repeatable) |
 | `--config path` | — | Load settings from TOML file |
 | `--dump-config` | — | Print current config as TOML and exit |
+| `--admin-token secret` | — | Require `Authorization: Bearer secret` on admin endpoints |
 | `--generate-ca prefix` | — | Generate a new local CA and exit |
 
 ## Admin endpoints
@@ -156,10 +157,13 @@ ctest --test-dir build --output-on-failure
 - [x] Stage 3 — In-memory LRU/TTL response cache with Prometheus metrics
 - [x] Stage 4 — TOML config file, provider allowlist/denylist, --dump-config
 - [x] Stage 4 — Docker image + docker-compose, GitHub Actions CI (Linux + macOS)
-- [ ] Stage 5 — Redis cache backend for multi-process deployments
-- [ ] Stage 5 — Signed release binaries (GitHub Releases)
-- [ ] Stage 5 — HTTP/2 upstream support
-- [ ] Stage 5 — Plugin ABI for custom filter extensions
+- [x] Stage 5 — Structured NDJSON logging (request ID, host, method, path, upstream_ms)
+- [x] Stage 5 — Admin API Bearer token auth (`--admin-token` / `admin.token` in TOML)
+- [x] Stage 5 — GitHub Releases workflow: binaries for linux-amd64, macos-arm64, macos-amd64 + SHA256SUMS
+- [x] Stage 5 — systemd unit file with hardening
+- [ ] Stage 6 — Redis cache backend for multi-process deployments
+- [ ] Stage 6 — HTTP/2 upstream support
+- [ ] Stage 6 — Plugin ABI for custom filter extensions
 
 ## Security model
 

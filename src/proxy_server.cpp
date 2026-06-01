@@ -4,11 +4,13 @@
 #include "fluxgate/connect_parser.h"
 #include "fluxgate/filter.h"
 #include "fluxgate/http_message.h"
+#include "fluxgate/logger.h"
 
 #include <asio/ssl.hpp>
 #include <openssl/ssl.h>
 
 #include <cctype>
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -22,6 +24,20 @@ using asio::ip::tcp;
 std::string buffer_to_string(const asio::streambuf::const_buffers_type& buffers, std::size_t bytes) {
     auto begin = asio::buffers_begin(buffers);
     return std::string(begin, begin + static_cast<std::ptrdiff_t>(bytes));
+}
+
+// Extracts the HTTP status code from the first line of a buffered response.
+int parse_response_status(const std::string& response) {
+    // "HTTP/1.1 200 OK"
+    const auto space = response.find(' ');
+    if (space == std::string::npos || space + 4 > response.size()) return 0;
+    int status = 0;
+    for (int i = 0; i < 3; ++i) {
+        const char c = response[space + 1 + i];
+        if (c < '0' || c > '9') return 0;
+        status = status * 10 + (c - '0');
+    }
+    return status;
 }
 
 // Rebuilds a wire-format HTTP/1.1 request. Updates Content-Length to match body.
@@ -138,8 +154,8 @@ private:
             asio::bind_executor(strand_,
                 [this, self = shared_from_this()](std::error_code ec, std::size_t) {
                     if (ec) return close();
-                    std::cout << '[' << id_ << "] tunnel "
-                              << target_.host << ':' << target_.port << '\n';
+                    Logger::instance().info(
+                        "tunnel " + target_.host + ':' + target_.port);
                     flush_prefetched_client_bytes();
                     relay_upstream_to_client();
                 }));
@@ -241,8 +257,8 @@ private:
             asio::bind_executor(strand_,
                 [this, self = shared_from_this()](std::error_code ec) {
                     if (ec) return;
-                    std::cout << '[' << id_ << "] mitm tls established for "
-                              << target_.host << ':' << target_.port << '\n';
+                    Logger::instance().info(
+                        "mitm tls established for " + target_.host + ':' + target_.port);
                     read_mitm_http_head();
                 }));
     }
@@ -260,9 +276,8 @@ private:
                     auto req = parse_http_request_head(header_str);
                     if (!req) return write_mitm_error("400 Bad Request");
 
-                    std::cout << '[' << id_ << "] intercepted "
-                              << req->method << ' ' << req->target
-                              << " for " << target_.host << '\n';
+                    Logger::instance().intercepted(
+                        id_, target_.host, req->method, req->target);
 
                     buf->consume(bytes);
                     read_mitm_body(std::move(buf), std::move(*req));
@@ -313,19 +328,21 @@ private:
             auto result = filter_pipeline_->apply(ctx, request, body);
             if (result.rejected)
                 return write_mitm_error("403 Forbidden");
-            if (result.modified)
+            if (result.modified) {
                 metrics_->on_request_filtered();
+                Logger::instance().filtered(id_, target_.host, request.method, request.target);
+            }
         }
 
         if (cache_) {
             const auto key = cache_key(request.method, target_.host + request.target, body);
             if (auto cached = cache_->get(key)) {
                 metrics_->on_cache_hit();
-                std::cout << '[' << id_ << "] cache hit "
-                          << request.method << ' ' << target_.host << request.target << '\n';
+                Logger::instance().cache_hit(id_, target_.host, request.method, request.target);
                 return send_cached_response(std::make_shared<std::string>(std::move(*cached)));
             }
             metrics_->on_cache_miss();
+            Logger::instance().cache_miss(id_, target_.host, request.method, request.target);
             pending_cache_key_ = key;
         }
 
@@ -390,6 +407,10 @@ private:
     }
 
     void forward_mitm_request(HttpRequestHead request, std::string body) {
+        pending_method_ = request.method;
+        pending_path_   = request.target;
+        upstream_start_ = std::chrono::steady_clock::now();
+
         auto wire = std::make_shared<std::string>(
             rebuild_http_request(request, target_.host, body));
 
@@ -410,6 +431,12 @@ private:
                     std::error_code ec, std::size_t bytes) mutable {
                     if (ec) {
                         maybe_cache_response(*response_buf);
+                        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - upstream_start_).count();
+                        const int status = parse_response_status(*response_buf);
+                        Logger::instance().forwarded(
+                            id_, target_.host, pending_method_, pending_path_,
+                            status, static_cast<std::uint64_t>(ms));
                         return shutdown_mitm_both();
                     }
 
@@ -510,6 +537,9 @@ private:
     std::shared_ptr<asio::ssl::context> upstream_ssl_ctx_;
     std::shared_ptr<asio::ssl::stream<tcp::socket>> upstream_ssl_;
     std::string pending_cache_key_;
+    std::string pending_method_;
+    std::string pending_path_;
+    std::chrono::steady_clock::time_point upstream_start_;
 };
 
 } // namespace

@@ -1,0 +1,30 @@
+[Unit]
+Description=FluxGate LLM API Proxy
+Documentation=https://github.com/anonymmized/FluxGate
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fluxgate
+Group=fluxgate
+ExecStart=/usr/local/bin/fluxgate --config /etc/fluxgate/config.toml
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/cache/fluxgate
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Logging goes to journal (use: journalctl -u fluxgate -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fluxgate
+
+[Install]
+WantedBy=multi-user.target

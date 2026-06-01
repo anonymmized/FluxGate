@@ -72,6 +72,7 @@ AppConfig load_config_file(const std::string& path) {
         if (auto v = (*admin)["enabled"].value<bool>()) cfg.enable_admin = *v;
         if (auto v = (*admin)["listen"].value<std::string>()) cfg.admin_host = *v;
         if (auto v = (*admin)["port"].value<int64_t>()) cfg.admin_port = static_cast<unsigned short>(*v);
+        if (auto v = (*admin)["token"].value<std::string>()) cfg.admin_token = *v;
     }
 
     if (auto providers = tbl["providers"].as_table()) {
@@ -161,6 +162,8 @@ AppConfig parse_args(int argc, char* argv[]) {
             config.enable_admin = true;
         } else if (arg == "--no-admin") {
             config.enable_admin = false;
+        } else if (arg == "--admin-token") {
+            config.admin_token = std::string(require_value(arg));
         } else if (arg == "--generate-ca") {
             config.generate_ca_prefix = std::string(require_value(arg));
         } else if (arg == "--ca-common-name") {
@@ -235,7 +238,8 @@ std::string dump_config_toml(const AppConfig& c) {
         << "[admin]\n"
         << "enabled = " << (c.enable_admin ? "true" : "false") << "\n"
         << "listen  = \"" << c.admin_host << "\"\n"
-        << "port    = " << c.admin_port << "\n\n"
+        << "port    = " << c.admin_port << "\n"
+        << "# token = \"changeme\"  # uncomment to require Bearer auth\n\n"
         << "[providers]\n"
         << "# Empty allowlist = intercept all hosts not in denylist\n"
         << "allowlist = [";
