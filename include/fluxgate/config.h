@@ -37,9 +37,16 @@ struct AppConfig {
     int mitm_leaf_valid_days = 7;
     bool enable_pii_redaction = true;
     std::size_t max_chat_history = 20;  // 0 = unlimited
+    // Provider filtering: hosts to intercept (allowlist) and never touch (denylist).
+    // Empty allowlist = intercept all hosts that aren't in denylist.
+    std::vector<std::string> provider_allowlist;
+    std::vector<std::string> provider_denylist;
+    // Path to TOML config file (loaded before CLI args, CLI args override file).
+    std::optional<std::string> config_file;
 };
 
 AppConfig parse_args(int argc, char* argv[]);
 std::string usage(std::string_view program_name);
+std::string dump_config_toml(const AppConfig& config);
 
 } // namespace fluxgate

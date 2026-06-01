@@ -19,6 +19,14 @@ FetchContent_Declare(
 set(SIMDJSON_JUST_LIBRARY ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(simdjson)
 
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG v3.4.0
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(tomlplusplus)
+
 add_library(FluxGateCore
     src/admin_server.cpp
     src/cache.cpp
@@ -41,7 +49,7 @@ else()
     target_include_directories(FluxGateCore PUBLIC /opt/homebrew/include)
 endif()
 
-target_link_libraries(FluxGateCore PUBLIC OpenSSL::SSL OpenSSL::Crypto Threads::Threads simdjson)
+target_link_libraries(FluxGateCore PUBLIC OpenSSL::SSL OpenSSL::Crypto Threads::Threads simdjson tomlplusplus::tomlplusplus)
 target_compile_definitions(FluxGateCore PUBLIC ASIO_STANDALONE)
 
 add_executable(FluxGate src/main.cpp)

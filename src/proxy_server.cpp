@@ -106,7 +106,8 @@ private:
 
                     target_ = std::move(*target);
                     client_header_.consume(bytes);
-                    if (mitm_services_) return accept_mitm_tunnel();
+                    if (mitm_services_ && should_mitm(target_.host))
+                        return accept_mitm_tunnel();
                     connect_to_upstream();
                 }));
     }
@@ -205,6 +206,18 @@ private:
         shutdown_socket(client_socket_);
         shutdown_socket(upstream_socket_);
         resolver_.cancel();
+    }
+
+    // Returns true if this host should be intercepted via MITM.
+    bool should_mitm(const std::string& host) const {
+        for (const auto& h : config_.provider_denylist)
+            if (h == host) return false;
+        if (!config_.provider_allowlist.empty()) {
+            for (const auto& h : config_.provider_allowlist)
+                if (h == host) return true;
+            return false;
+        }
+        return true;
     }
 
     // ── MITM path ────────────────────────────────────────────────────────────
