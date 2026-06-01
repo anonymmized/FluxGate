@@ -24,6 +24,30 @@ sub-millisecond overhead.
 
 ---
 
+## ⏱️ TL;DR — start saving in 3 steps
+
+```sh
+# 1. Install
+curl -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash
+
+# 2. Run (a wizard sets everything up — just press Enter through it)
+fluxgate
+
+# 3. Tell your app to use the proxy
+export HTTPS_PROXY=http://127.0.0.1:8080
+```
+
+Now run your app as usual. Watch the savings live at **http://127.0.0.1:9090**.
+
+> **No API key? No problem.** Test it instantly with no account:
+> ```sh
+> for i in $(seq 1 10); do curl -sk -x http://127.0.0.1:8080 https://httpbin.org/get -o /dev/null; done
+> ```
+> Open the dashboard — you'll see the cache hit rate climb to ~90%.
+> *(Pick option **7 — Everything** in the wizard so non-LLM hosts like httpbin are intercepted too.)*
+
+---
+
 ## 🚀 Quick start
 
 FluxGate is **interactive**. Just run it with no arguments and a setup wizard
