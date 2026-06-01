@@ -172,8 +172,6 @@ ctest --test-dir build --output-on-failure
 - [x] Stage 5 — systemd unit file with hardening
 - [x] Stage 6 — Redis cache backend (`--redis-url` / `cache.backend = "redis"`, `-DFLUXGATE_REDIS=ON`)
 - [x] Stage 6 — Integration tests: real end-to-end tunnel + MITM filter+cache round-trip
-- [x] Stage 6 — Live web dashboard on admin port (`GET /`), `/stats` JSON endpoint
-- [x] Stage 6 — Estimated tokens saved + cost saved metrics; examples for OpenAI/Anthropic
 - [ ] Stage 7 — HTTP/2 upstream support
 - [ ] Stage 7 — Plugin ABI for custom filter extensions
 
