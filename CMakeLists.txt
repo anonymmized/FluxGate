@@ -52,6 +52,8 @@ set(FLUXGATE_SOURCES
     src/metrics.cpp
     src/mitm_tls.cpp
     src/proxy_server.cpp
+    src/setup_wizard.cpp
+    src/tui.cpp
 )
 if(FLUXGATE_REDIS)
     list(APPEND FLUXGATE_SOURCES src/redis_cache.cpp)
