@@ -20,8 +20,10 @@ struct AppConfig {
     std::size_t worker_threads = 0;
     std::size_t max_header_bytes = 16 * 1024;
     std::size_t relay_buffer_bytes = 32 * 1024;
+    std::size_t max_body_bytes = 4 * 1024 * 1024;  // 4 MB
     bool enable_cache = true;
     std::size_t cache_max_entries = 4096;
+    std::size_t cache_ttl_seconds = 300;
     bool enable_admin = true;
     std::string admin_host = "127.0.0.1";
     unsigned short admin_port = 9090;
@@ -33,6 +35,8 @@ struct AppConfig {
     std::string mitm_ca_cert_path;
     std::size_t mitm_leaf_cache_entries = 4096;
     int mitm_leaf_valid_days = 7;
+    bool enable_pii_redaction = true;
+    std::size_t max_chat_history = 20;  // 0 = unlimited
 };
 
 AppConfig parse_args(int argc, char* argv[]);

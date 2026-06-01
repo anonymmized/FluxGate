@@ -31,8 +31,10 @@ std::size_t parse_size(std::string_view value, std::string_view label) {
 
 std::string usage(std::string_view program_name) {
     return "usage: " + std::string(program_name)
-        + " [--listen host] [--port port] [--threads n] [--no-cache] [--cache-max-entries n]"
+        + " [--listen host] [--port port] [--threads n]"
+        + " [--no-cache] [--cache-max-entries n] [--cache-ttl seconds]"
         + " [--admin host:port] [--no-admin]"
+        + " [--max-body bytes] [--no-pii] [--max-history n]"
         + " [--generate-ca prefix] [--ca-common-name name] [--ca-valid-days days]"
         + " [--mitm --mitm-ca-key path --mitm-ca-cert path]"
         + " [--mitm-leaf-cache-entries n] [--mitm-leaf-valid-days days]";
@@ -63,6 +65,14 @@ AppConfig parse_args(int argc, char* argv[]) {
             config.enable_cache = false;
         } else if (arg == "--cache-max-entries") {
             config.cache_max_entries = parse_size(require_value(arg), "cache max entries");
+        } else if (arg == "--cache-ttl") {
+            config.cache_ttl_seconds = parse_size(require_value(arg), "cache TTL seconds");
+        } else if (arg == "--max-body") {
+            config.max_body_bytes = parse_size(require_value(arg), "max body bytes");
+        } else if (arg == "--no-pii") {
+            config.enable_pii_redaction = false;
+        } else if (arg == "--max-history") {
+            config.max_chat_history = parse_size(require_value(arg), "max chat history");
         } else if (arg == "--admin") {
             const auto value = require_value(arg);
             const auto colon = value.rfind(':');
