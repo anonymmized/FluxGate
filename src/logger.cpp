@@ -108,6 +108,9 @@ void Logger::emit(std::string_view event, std::uint64_t session_id,
                   std::string_view host, std::string_view method,
                   std::string_view path, int status, std::uint64_t upstream_ms,
                   std::string_view error) {
+    // "error" events are error-level; everything else is info-level.
+    const Level evt_level = (event == "error") ? Level::error : Level::info;
+    if (evt_level < level_) return;
     std::lock_guard lock(g_log_mutex);
     if (json_) {
         std::clog << "{\"ts\":\"" << now_iso8601()

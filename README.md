@@ -1,197 +1,291 @@
-# FluxGate
+<div align="center">
+
+# ⚡ FluxGate
+
+### Cut your LLM API bill by 40–70% — without touching your code.
 
 [![CI](https://github.com/anonymmized/FluxGate/actions/workflows/ci.yml/badge.svg)](https://github.com/anonymmized/FluxGate/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/anonymmized/FluxGate?color=7c3aed)](https://github.com/anonymmized/FluxGate/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C.svg)](https://en.cppreference.com/w/cpp/20)
 
-> **Cut your LLM API bill by 40–70% without touching your application code.**
+A high-performance C++20 proxy that sits between your app and any LLM API
+(OpenAI · Anthropic · Gemini · Mistral · Groq). It **caches** identical
+requests, **trims** chat history, and **redacts** PII — all locally, with
+sub-millisecond overhead.
 
-FluxGate is a high-performance C++20 transparent HTTPS proxy that sits between your application and any LLM API (OpenAI, Anthropic, Gemini, etc.). It intercepts requests, strips redundant tokens, and caches identical queries — all with sub-millisecond local overhead.
+[**Quick start**](#-quick-start) ·
+[**How it works**](#-how-it-works) ·
+[**Dashboard**](#-dashboard) ·
+[**Config**](#-configuration) ·
+[**Website**](https://anonymmized.github.io/FluxGate/)
 
-## How it works
+</div>
 
-```
-Your App  ──HTTPS──▶  FluxGate (local)  ──HTTPS──▶  OpenAI / Anthropic / etc.
-                           │
-                    ┌──────▼──────┐
-                    │  PII Strip  │   removes emails, phone numbers
-                    │  History    │   truncates chat history to N messages
-                    │  Cache      │   exact-match: zero API calls for repeats
-                    └─────────────┘
-```
+---
 
-FluxGate terminates TLS from your client (MITM with a local CA you generate yourself), inspects and optionally modifies the JSON payload, then opens a fresh TLS connection to the real upstream.
+## 🚀 Quick start
 
-## Features
+FluxGate is **interactive**. Just run it with no arguments and a setup wizard
+walks you through everything — generating a CA, choosing providers, and writing
+your config — in about 60 seconds.
 
-- **Token savings** — chat history limit filter drops old messages before they reach the API
-- **PII redaction** — strips email addresses and phone numbers from request bodies
-- **Smart caching** — LRU + TTL cache; identical requests never hit the API twice
-- **Async C++20** — standalone Asio, no blocking I/O, scales to thousands of concurrent sessions
-- **MITM TLS** — per-host certificate generation signed by your local CA, leaf cert cache
-- **Prometheus metrics** — `/metrics` exposes sessions, bytes, cache hits/misses, filtered requests
-- **Health endpoint** — `/healthz` for load balancer probes
-- **Zero dependencies at runtime** — single static binary, no external services needed
-
-## Quick start
-
-### Option A — One-line installer (recommended)
+### One-line install
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash
 ```
 
-Downloads the latest binary, generates a local CA, trusts it in your OS keychain, and writes `~/.fluxgate/config.toml`. Then:
+### Or build from source
 
 ```sh
-~/.fluxgate/fluxgate --config ~/.fluxgate/config.toml
-export HTTPS_PROXY=http://127.0.0.1:8080   # point your app at the proxy
-```
-
-### Option C — Docker
-
-```sh
-# Generate CA (one-time setup)
-docker run --rm -v $(pwd)/certs:/certs fluxgate \
-  --generate-ca /certs/fluxgate-ca
-
-# Copy fluxgate.toml.example → fluxgate.toml and adjust paths
-cp fluxgate.toml.example fluxgate.toml
-
-docker compose up -d
-```
-
-### Option B — Build from source
-
-```sh
+git clone https://github.com/anonymmized/FluxGate.git
+cd FluxGate
 cmake -S . -B build && cmake --build build --parallel
+./build/FluxGate          # ← launches the setup wizard
 ```
 
-Requires: C++20 compiler, CMake ≥ 3.15, OpenSSL. `simdjson` and `toml++` are fetched automatically.
+That's it. On first run you'll see:
 
-**With Redis cache backend:**
+```
+  ⚡ FluxGate Setup Wizard
+  ─────────────────────────────────────
+  Cut your LLM API bill by 40–70%.
+
+  Proxy
+  ─────
+  → Listen address [127.0.0.1]:
+  → Listen port [8080]:
+
+  TLS Interception (MITM)
+  ───────────────────────
+  → Enable MITM mode [Y/n]:
+  ...
+```
+
+The wizard generates a local CA and prints the one command needed to trust it.
+After setup, FluxGate launches a **live terminal dashboard**:
+
+```
+╔════════════════════════════════════════════════════════════╗
+║ FluxGate  ·  127.0.0.1:8080  ·  MITM ON                     ║
+╠════════════════════════════════════════════════════════════╣
+║                                                              ║
+║ SESSIONS                                                     ║
+║  Active     2    Accepted     147    Failed     0            ║
+║                                                              ║
+║ CACHE                                                        ║
+║  Hit rate  ██████████████████████  93.2%                    ║
+║  Hits        137      Misses        10                       ║
+║                                                              ║
+║ SAVINGS / TRAFFIC                                            ║
+║  Tokens     48.2K      In      12.4 KB                       ║
+║  Cost  $0.2410      Out      1.8 MB                          ║
+║                                                              ║
+╠════════════════════════════════════════════════════════════╣
+║  Dashboard: http://127.0.0.1:9090/   [q] quit                ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+### Point your app at the proxy
+
 ```sh
-cmake -S . -B build -DFLUXGATE_REDIS=ON
+export HTTPS_PROXY=http://127.0.0.1:8080
 ```
 
-### 2. Generate a local CA
-
-```sh
-./build/FluxGate --generate-ca ./fluxgate-ca
-# writes fluxgate-ca.key.pem and fluxgate-ca.cert.pem
-```
-
-Install `fluxgate-ca.cert.pem` into your OS/browser trust store **once**. This is the only setup step.
-
-### 3. Run FluxGate
-
-```sh
-./build/FluxGate \
-  --listen 127.0.0.1 --port 8080 \
-  --mitm \
-  --mitm-ca-key ./fluxgate-ca.key.pem \
-  --mitm-ca-cert ./fluxgate-ca.cert.pem \
-  --max-history 20 \
-  --cache-ttl 300
-```
-
-### 4. Point your app at the proxy
+Or in code:
 
 ```python
-# Python / openai-python
 import openai, httpx
-client = openai.OpenAI(
-    http_client=httpx.Client(proxies="http://127.0.0.1:8080")
-)
+client = openai.OpenAI(http_client=httpx.Client(proxies="http://127.0.0.1:8080"))
 ```
 
-```sh
-# curl
-curl --proxy http://127.0.0.1:8080 https://api.openai.com/v1/chat/completions ...
+See [`examples/`](examples/) for OpenAI, Anthropic, and a benchmark script.
+
+---
+
+## 🧠 How it works
+
+```
+   Your App  ──HTTPS──▶   ⚡ FluxGate   ──HTTPS──▶   OpenAI / Anthropic / …
+                              │
+                    ┌─────────┴─────────┐
+                    │  Provider routing  │  intercept only chosen hosts
+                    │  PII redaction     │  strip emails & phone numbers
+                    │  History trimming  │  keep only the last N messages
+                    │  Response cache    │  identical query → 0 API calls
+                    └────────────────────┘
 ```
 
-## CLI reference
+FluxGate terminates TLS from your client using a **local CA you generate
+yourself**, inspects and optionally rewrites the JSON payload, then opens a
+fresh verified TLS connection to the real provider. Nothing ever leaves your
+machine except the (optimised) request to the upstream API.
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--listen host` | `0.0.0.0` | Bind address |
-| `--port N` | `8080` | Listen port |
-| `--threads N` | CPU count | Worker threads |
-| `--mitm` | off | Enable TLS interception |
-| `--mitm-ca-key path` | — | CA private key PEM |
-| `--mitm-ca-cert path` | — | CA certificate PEM |
-| `--max-history N` | `20` | Max chat messages kept (0 = unlimited) |
-| `--no-pii` | on | Disable PII redaction |
-| `--max-body N` | `4194304` | Max intercepted body size (bytes) |
-| `--cache-ttl N` | `300` | Cache TTL in seconds |
-| `--no-cache` | on | Disable response cache |
-| `--cache-max-entries N` | `4096` | Max cached responses |
-| `--admin host:port` | `127.0.0.1:9090` | Admin/metrics endpoint |
-| `--no-admin` | on | Disable admin endpoint |
-| `--allow host` | — | Add host to MITM allowlist (repeatable) |
-| `--deny host` | — | Add host to MITM denylist (repeatable) |
-| `--config path` | — | Load settings from TOML file |
-| `--dump-config` | — | Print current config as TOML and exit |
-| `--admin-token secret` | — | Require `Authorization: Bearer secret` on admin endpoints |
-| `--generate-ca prefix` | — | Generate a new local CA and exit |
+---
 
-## Admin endpoints
+## 📊 Dashboard
+
+Two ways to watch FluxGate work:
+
+| Where | What |
+|-------|------|
+| **Terminal** | Live TUI with cache bar, savings, and traffic — refreshes every second |
+| **Browser** | Open `http://127.0.0.1:9090/` for a full dashboard with **live sparkline charts** |
+
+Admin endpoints:
 
 | Endpoint | Description |
 |----------|-------------|
-| `GET /` | **Live web dashboard** — sessions, cache hit rate, tokens/cost saved |
-| `GET /healthz` | `ok` — for load balancer probes |
+| `GET /` | Web dashboard with hit-rate & sessions charts |
+| `GET /stats` | JSON snapshot (hit rate, tokens & cost saved) |
+| `GET /history` | Last 60s of metrics for charting |
 | `GET /metrics` | Prometheus text format |
-| `GET /stats` | JSON snapshot of all metrics |
+| `GET /healthz` | `ok` — for load balancers |
 
-Open `http://127.0.0.1:9090/` in your browser after starting FluxGate to see the live dashboard.
+---
 
-Metrics tracked: sessions, bytes relayed, cache hits/misses, filtered requests, **estimated tokens saved**, **estimated cost saved** (at $5/1M tokens gpt-4o pricing).
+## ✨ Features
 
-## Architecture
+- **🔁 Smart cache** — identical queries return instantly. LRU + TTL in-memory, or Redis for multi-instance setups.
+- **✂️ History trimming** — keep only the last *N* chat messages; cuts input tokens on long conversations.
+- **🔒 PII redaction** — strip emails and phone numbers before they leave your network.
+- **🎯 Provider routing** — intercept only the hosts you choose; everything else tunnels transparently.
+- **📈 Token & cost tracking** — see estimated tokens and dollars saved, live.
+- **🖥️ Interactive setup** — no flags to memorise; a wizard configures everything.
+- **🐳 Deploy anywhere** — single static binary, Docker image, systemd unit.
+- **🔍 Structured logs** — NDJSON with request IDs and upstream latency; never logs body content.
 
+---
+
+## ⚙️ Configuration
+
+The wizard writes a `fluxgate.toml` you can edit by hand. Re-run with that file:
+
+```sh
+./build/FluxGate --config fluxgate.toml
 ```
-ProxyServer (Asio acceptor)
-  └── Session (per connection, strand-serialized)
-        ├── Plain tunnel path  (CONNECT → TCP relay, no interception)
-        └── MITM path (--mitm flag)
-              ├── MitmTlsFactory  → per-host leaf cert signed by local CA
-              ├── TLS handshake with client  (server-side)
-              ├── Body read  (Content-Length driven, max_body_bytes cap)
-              ├── FilterPipeline
-              │     ├── PiiRedactionFilter   (regex, email + phone)
-              │     └── ChatHistoryLimitFilter  (simdjson DOM, keeps last N)
-              ├── MemoryCache  (LRU + TTL, shared across sessions)
-              ├── TLS connect to real upstream  (client-side, verify_peer + SNI)
-              └── Bidirectional relay + response caching
+
+```toml
+[proxy]
+listen  = "127.0.0.1"
+port    = 8080
+
+[tls]
+enabled = true
+ca_key  = "./fluxgate-ca.key.pem"
+ca_cert = "./fluxgate-ca.cert.pem"
+
+[filters]
+pii_redaction    = true
+max_chat_history = 20      # 0 = unlimited
+
+[cache]
+enabled     = true
+backend     = "memory"     # or "redis"
+ttl_seconds = 300
+# redis_url = "redis://127.0.0.1:6379"
+
+[admin]
+enabled = true
+port    = 9090
+# token = "secret"         # require Bearer auth
+
+[providers]
+allowlist = ["api.openai.com", "api.anthropic.com"]  # empty = intercept all
+denylist  = []
 ```
 
-## Build & test
+<details>
+<summary><b>Advanced: command-line flags</b></summary>
+
+Every config value can be overridden from the CLI (flags win over the file):
+
+```sh
+./build/FluxGate \
+  --config fluxgate.toml \
+  --port 8080 \
+  --max-history 20 \
+  --cache-ttl 300 \
+  --allow api.openai.com \
+  --deny internal.corp \
+  --admin-token secret
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config path` | Load settings from a TOML file |
+| `--setup` | Force the interactive wizard |
+| `--listen host` / `--port N` | Bind address / port |
+| `--threads N` | Worker threads (default: CPU count) |
+| `--mitm` `--mitm-ca-key` `--mitm-ca-cert` | Enable TLS interception |
+| `--max-history N` / `--no-pii` | Filter controls |
+| `--cache-ttl N` / `--no-cache` / `--cache-backend redis` | Cache controls |
+| `--allow host` / `--deny host` | Provider allowlist / denylist |
+| `--admin host:port` / `--admin-token T` | Admin endpoint |
+| `--generate-ca prefix` | Generate a CA and exit |
+| `--dump-config` | Print current config as TOML |
+
+Run `./build/FluxGate --help` for the full list.
+</details>
+
+---
+
+## 🐳 Docker
+
+```sh
+docker compose up -d
+# or
+docker run -d -v ~/.fluxgate:/certs:ro -p 8080:8080 -p 9090:9090 \
+  ghcr.io/anonymmized/fluxgate:latest \
+  --mitm --mitm-ca-key /certs/ca.key.pem --mitm-ca-cert /certs/ca.cert.pem
+```
+
+---
+
+## 🔧 Build & test
 
 ```sh
 cmake -S . -B build && cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-## Roadmap
+Requires C++20, CMake ≥ 3.15, OpenSSL. `simdjson` and `toml++` are fetched
+automatically. For the Redis backend: `cmake -S . -B build -DFLUXGATE_REDIS=ON`.
 
-- [x] Stage 1 — Async TCP/SSL CONNECT gateway
-- [x] Stage 2 — TLS MITM interception, body capture, JSON parsing
-- [x] Stage 3 — Filter pipeline (PII redaction, chat history truncation)
-- [x] Stage 3 — In-memory LRU/TTL response cache with Prometheus metrics
-- [x] Stage 4 — TOML config file, provider allowlist/denylist, --dump-config
-- [x] Stage 4 — Docker image + docker-compose, GitHub Actions CI (Linux + macOS)
-- [x] Stage 5 — Structured NDJSON logging (request ID, host, method, path, upstream_ms)
-- [x] Stage 5 — Admin API Bearer token auth (`--admin-token` / `admin.token` in TOML)
-- [x] Stage 5 — GitHub Releases workflow: binaries for linux-amd64, macos-arm64, macos-amd64 + SHA256SUMS
-- [x] Stage 5 — systemd unit file with hardening
-- [x] Stage 6 — Redis cache backend (`--redis-url` / `cache.backend = "redis"`, `-DFLUXGATE_REDIS=ON`)
-- [x] Stage 6 — Integration tests: real end-to-end tunnel + MITM filter+cache round-trip
-- [ ] Stage 7 — HTTP/2 upstream support
-- [ ] Stage 7 — Plugin ABI for custom filter extensions
+Tests include a full **integration suite** that spins up a real proxy and a
+local HTTPS upstream, then verifies the MITM filter and cache end-to-end.
 
-## Security model
+---
 
-FluxGate operates as a **local** MITM proxy. The generated CA certificate should only be trusted on the machine running FluxGate. Never distribute the CA private key. Review [docs/MITM_CA.md](docs/MITM_CA.md) before deploying in any shared or production environment.
+## 🔒 Security
 
-## License
+FluxGate runs **locally** — your traffic never leaves your infrastructure
+through it. It never logs API keys or body content. See
+[`docs/SECURITY.md`](docs/SECURITY.md) for the full trust model.
 
-See LICENSE file.
+---
+
+## 🗺️ Roadmap
+
+- [x] Async TCP/SSL CONNECT gateway
+- [x] Full TLS MITM with body capture & JSON parsing
+- [x] Filter pipeline (PII redaction, history trimming)
+- [x] In-memory & Redis response cache
+- [x] Provider allowlist/denylist
+- [x] Interactive setup wizard + live terminal TUI
+- [x] Web dashboard with live charts
+- [x] Docker, systemd, signed releases, CI
+- [ ] HTTP/2 upstream support
+- [ ] Plugin ABI for custom filters
+- [ ] Per-client rate limiting & quotas
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).
+
+<div align="center">
+<sub>Built with modern C++20 · <a href="https://anonymmized.github.io/FluxGate/">fluxgate.dev</a></sub>
+</div>

@@ -5,3 +5,9 @@ build/
 .DS_Store
 .vscode/
 .idea/
+
+# Wizard-generated artifacts (never commit private keys or local config)
+fluxgate.toml
+*.key.pem
+*.cert.pem
+fluxgate-ca*
