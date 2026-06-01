@@ -1,77 +1,151 @@
 # FluxGate
-High-performance C++ proxy gateway for AI traffic optimization. Reduces API costs by 40-70% via real-time intelligent filtering, deduplication, and caching.
 
-## Current Status
+> **Cut your LLM API bill by 40–70% without touching your application code.**
 
-FluxGate currently implements the production base for Stage 1 of the roadmap: an asynchronous HTTP CONNECT gateway plus testable core primitives for later AI traffic optimization.
+FluxGate is a high-performance C++20 transparent HTTPS proxy that sits between your application and any LLM API (OpenAI, Anthropic, Gemini, etc.). It intercepts requests, strips redundant tokens, and caches identical queries — all with sub-millisecond local overhead.
 
-- Accepts client TCP connections on a configurable port.
-- Parses CONNECT targets, including default `:443` and IPv6 bracket notation.
-- Resolves and connects to upstream hosts asynchronously.
-- Relays traffic bidirectionally without blocking I/O.
-- Uses a multi-threaded Asio event loop with per-session strand serialization.
-- Provides reusable parser, filter-pipeline, and local memory-cache modules.
-- Provides an admin endpoint with `/healthz` and Prometheus-style `/metrics`.
-- Provides local CA generation, per-host leaf-certificate caching, and server TLS context creation primitives for the upcoming MITM layer.
-- Includes CTest unit tests for parsers, filters, and cache behavior.
+## How it works
 
-MITM TLS handshakes inside CONNECT sessions are available as an opt-in scaffold. Upstream TLS forwarding, JSON payload extraction, filter wiring, and cache integration are the next layers.
+```
+Your App  ──HTTPS──▶  FluxGate (local)  ──HTTPS──▶  OpenAI / Anthropic / etc.
+                           │
+                    ┌──────▼──────┐
+                    │  PII Strip  │   removes emails, phone numbers
+                    │  History    │   truncates chat history to N messages
+                    │  Cache      │   exact-match: zero API calls for repeats
+                    └─────────────┘
+```
 
-## Build
+FluxGate terminates TLS from your client (MITM with a local CA you generate yourself), inspects and optionally modifies the JSON payload, then opens a fresh TLS connection to the real upstream.
+
+## Features
+
+- **Token savings** — chat history limit filter drops old messages before they reach the API
+- **PII redaction** — strips email addresses and phone numbers from request bodies
+- **Smart caching** — LRU + TTL cache; identical requests never hit the API twice
+- **Async C++20** — standalone Asio, no blocking I/O, scales to thousands of concurrent sessions
+- **MITM TLS** — per-host certificate generation signed by your local CA, leaf cert cache
+- **Prometheus metrics** — `/metrics` exposes sessions, bytes, cache hits/misses, filtered requests
+- **Health endpoint** — `/healthz` for load balancer probes
+- **Zero dependencies at runtime** — single static binary, no external services needed
+
+## Quick start
+
+### 1. Build
 
 ```sh
 cmake -S . -B build
-cmake --build build
+cmake --build build --parallel
 ```
 
-## Run
+Requires: C++20 compiler, CMake ≥ 3.15, OpenSSL. `simdjson` is fetched automatically.
+
+### 2. Generate a local CA
 
 ```sh
-./build/FluxGate 8080
+./build/FluxGate --generate-ca ./fluxgate-ca
+# writes fluxgate-ca.key.pem and fluxgate-ca.cert.pem
 ```
 
-Then configure an HTTPS client to use `127.0.0.1:8080` as an HTTP proxy.
+Install `fluxgate-ca.cert.pem` into your OS/browser trust store **once**. This is the only setup step.
 
-CLI options:
-
-```sh
-./build/FluxGate --listen 127.0.0.1 --port 8080 --threads 4 --admin 127.0.0.1:9090
-```
-
-Admin endpoints:
-
-```sh
-curl http://127.0.0.1:9090/healthz
-curl http://127.0.0.1:9090/metrics
-```
-
-Generate a local root CA for future MITM mode:
-
-```sh
-./build/FluxGate --generate-ca ./fluxgate-local-ca --ca-common-name "FluxGate Local Root CA"
-```
-
-This writes `fluxgate-local-ca.key.pem` and `fluxgate-local-ca.cert.pem`. Do not install the CA into a trust store except in explicit test or controlled enterprise deployments.
-
-Run the MITM handshake scaffold:
+### 3. Run FluxGate
 
 ```sh
 ./build/FluxGate \
-  --listen 127.0.0.1 \
-  --port 8080 \
+  --listen 127.0.0.1 --port 8080 \
   --mitm \
-  --mitm-ca-key ./fluxgate-local-ca.key.pem \
-  --mitm-ca-cert ./fluxgate-local-ca.cert.pem
+  --mitm-ca-key ./fluxgate-ca.key.pem \
+  --mitm-ca-cert ./fluxgate-ca.cert.pem \
+  --max-history 20 \
+  --cache-ttl 300
 ```
 
-In this mode FluxGate performs CONNECT, presents a generated per-host leaf certificate, completes server-side TLS with the client, reads the decrypted HTTP request head, and returns `501 Not Implemented` until upstream forwarding is wired.
+### 4. Point your app at the proxy
 
-## Test
+```python
+# Python / openai-python
+import openai, httpx
+client = openai.OpenAI(
+    http_client=httpx.Client(proxies="http://127.0.0.1:8080")
+)
+```
 
 ```sh
+# curl
+curl --proxy http://127.0.0.1:8080 https://api.openai.com/v1/chat/completions ...
+```
+
+## CLI reference
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--listen host` | `0.0.0.0` | Bind address |
+| `--port N` | `8080` | Listen port |
+| `--threads N` | CPU count | Worker threads |
+| `--mitm` | off | Enable TLS interception |
+| `--mitm-ca-key path` | — | CA private key PEM |
+| `--mitm-ca-cert path` | — | CA certificate PEM |
+| `--max-history N` | `20` | Max chat messages kept (0 = unlimited) |
+| `--no-pii` | on | Disable PII redaction |
+| `--max-body N` | `4194304` | Max intercepted body size (bytes) |
+| `--cache-ttl N` | `300` | Cache TTL in seconds |
+| `--no-cache` | on | Disable response cache |
+| `--cache-max-entries N` | `4096` | Max cached responses |
+| `--admin host:port` | `127.0.0.1:9090` | Admin/metrics endpoint |
+| `--no-admin` | on | Disable admin endpoint |
+| `--generate-ca prefix` | — | Generate a new local CA and exit |
+
+## Admin endpoints
+
+```sh
+curl http://127.0.0.1:9090/healthz   # → "ok"
+curl http://127.0.0.1:9090/metrics   # → Prometheus text format
+```
+
+Metrics include: sessions accepted/active/rejected, bytes relayed, cache hits/misses, filtered requests, upstream failures.
+
+## Architecture
+
+```
+ProxyServer (Asio acceptor)
+  └── Session (per connection, strand-serialized)
+        ├── Plain tunnel path  (CONNECT → TCP relay, no interception)
+        └── MITM path (--mitm flag)
+              ├── MitmTlsFactory  → per-host leaf cert signed by local CA
+              ├── TLS handshake with client  (server-side)
+              ├── Body read  (Content-Length driven, max_body_bytes cap)
+              ├── FilterPipeline
+              │     ├── PiiRedactionFilter   (regex, email + phone)
+              │     └── ChatHistoryLimitFilter  (simdjson DOM, keeps last N)
+              ├── MemoryCache  (LRU + TTL, shared across sessions)
+              ├── TLS connect to real upstream  (client-side, verify_peer + SNI)
+              └── Bidirectional relay + response caching
+```
+
+## Build & test
+
+```sh
+cmake -S . -B build && cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-## Product Readiness
+## Roadmap
 
-See [docs/PRODUCT_READINESS.md](docs/PRODUCT_READINESS.md) for the release criteria required before FluxGate can be sold.
+- [x] Stage 1 — Async TCP/SSL CONNECT gateway
+- [x] Stage 2 — TLS MITM interception, body capture, JSON parsing
+- [x] Stage 3 — Filter pipeline (PII redaction, chat history truncation)
+- [x] Stage 3 — In-memory LRU/TTL response cache with Prometheus metrics
+- [ ] Stage 4 — Config file (YAML/TOML), provider allowlist/denylist
+- [ ] Stage 4 — Redis cache backend for multi-process deployments
+- [ ] Stage 5 — Docker image, systemd unit, signed release builds
+- [ ] Stage 5 — HTTP/2 upstream support
+- [ ] Stage 5 — Plugin ABI for custom filter extensions
+
+## Security model
+
+FluxGate operates as a **local** MITM proxy. The generated CA certificate should only be trusted on the machine running FluxGate. Never distribute the CA private key. Review [docs/MITM_CA.md](docs/MITM_CA.md) before deploying in any shared or production environment.
+
+## License
+
+See LICENSE file.

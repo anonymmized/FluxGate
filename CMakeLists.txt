@@ -9,6 +9,16 @@ find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 find_package(asio QUIET)
 
+include(FetchContent)
+FetchContent_Declare(
+    simdjson
+    GIT_REPOSITORY https://github.com/simdjson/simdjson.git
+    GIT_TAG v3.10.0
+    GIT_SHALLOW TRUE
+)
+set(SIMDJSON_JUST_LIBRARY ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(simdjson)
+
 add_library(FluxGateCore
     src/admin_server.cpp
     src/cache.cpp
@@ -31,7 +41,7 @@ else()
     target_include_directories(FluxGateCore PUBLIC /opt/homebrew/include)
 endif()
 
-target_link_libraries(FluxGateCore PUBLIC OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+target_link_libraries(FluxGateCore PUBLIC OpenSSL::SSL OpenSSL::Crypto Threads::Threads simdjson)
 target_compile_definitions(FluxGateCore PUBLIC ASIO_STANDALONE)
 
 add_executable(FluxGate src/main.cpp)

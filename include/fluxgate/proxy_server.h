@@ -1,6 +1,8 @@
 #pragma once
 
+#include "fluxgate/cache.h"
 #include "fluxgate/config.h"
+#include "fluxgate/filter.h"
 #include "fluxgate/metrics.h"
 #include "fluxgate/mitm_services.h"
 
@@ -25,6 +27,8 @@ private:
     asio::ip::tcp::acceptor acceptor_;
     std::shared_ptr<Metrics> metrics_;
     SharedMitmServices mitm_services_;
+    std::shared_ptr<MemoryCache> cache_;
+    std::shared_ptr<FilterPipeline> filter_pipeline_;
     std::atomic_uint64_t session_id_{0};
 };
 
