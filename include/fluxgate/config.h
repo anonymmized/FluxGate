@@ -24,6 +24,8 @@ struct AppConfig {
     bool enable_cache = true;
     std::size_t cache_max_entries = 4096;
     std::size_t cache_ttl_seconds = 300;
+    std::string cache_backend = "memory";  // "memory" | "redis"
+    std::string redis_url = "redis://127.0.0.1:6379";
     bool enable_admin = true;
     std::string admin_host = "127.0.0.1";
     unsigned short admin_port = 9090;

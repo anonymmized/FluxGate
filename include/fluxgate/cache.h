@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fluxgate/icache.h"
+
 #include <chrono>
 #include <cstddef>
 #include <list>
@@ -16,13 +18,13 @@ struct CacheEntry {
     std::chrono::steady_clock::time_point expires_at;
 };
 
-class MemoryCache {
+class MemoryCache final : public ICache {
 public:
     explicit MemoryCache(std::size_t max_entries);
 
-    void put(std::string key, std::string value, std::chrono::seconds ttl);
-    std::optional<std::string> get(std::string_view key);
-    std::size_t size() const;
+    void put(std::string key, std::string value, std::chrono::seconds ttl) override;
+    std::optional<std::string> get(std::string_view key) override;
+    std::size_t size() const override;
 
 private:
     using Order = std::list<std::string>;

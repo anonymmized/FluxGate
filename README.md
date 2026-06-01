@@ -54,6 +54,11 @@ cmake -S . -B build && cmake --build build --parallel
 
 Requires: C++20 compiler, CMake ≥ 3.15, OpenSSL. `simdjson` and `toml++` are fetched automatically.
 
+**With Redis cache backend:**
+```sh
+cmake -S . -B build -DFLUXGATE_REDIS=ON
+```
+
 ### 2. Generate a local CA
 
 ```sh
@@ -161,9 +166,10 @@ ctest --test-dir build --output-on-failure
 - [x] Stage 5 — Admin API Bearer token auth (`--admin-token` / `admin.token` in TOML)
 - [x] Stage 5 — GitHub Releases workflow: binaries for linux-amd64, macos-arm64, macos-amd64 + SHA256SUMS
 - [x] Stage 5 — systemd unit file with hardening
-- [ ] Stage 6 — Redis cache backend for multi-process deployments
-- [ ] Stage 6 — HTTP/2 upstream support
-- [ ] Stage 6 — Plugin ABI for custom filter extensions
+- [x] Stage 6 — Redis cache backend (`--redis-url` / `cache.backend = "redis"`, `-DFLUXGATE_REDIS=ON`)
+- [x] Stage 6 — Integration tests: real end-to-end tunnel + MITM filter+cache round-trip
+- [ ] Stage 7 — HTTP/2 upstream support
+- [ ] Stage 7 — Plugin ABI for custom filter extensions
 
 ## Security model
 

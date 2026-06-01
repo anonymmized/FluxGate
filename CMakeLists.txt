@@ -27,7 +27,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tomlplusplus)
 
-add_library(FluxGateCore
+option(FLUXGATE_REDIS "Build with Redis cache backend (requires hiredis)" OFF)
+if(FLUXGATE_REDIS)
+    FetchContent_Declare(
+        hiredis
+        GIT_REPOSITORY https://github.com/redis/hiredis.git
+        GIT_TAG v1.2.0
+        GIT_SHALLOW TRUE
+    )
+    set(DISABLE_TESTS ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(hiredis)
+endif()
+
+set(FLUXGATE_SOURCES
     src/admin_server.cpp
     src/cache.cpp
     src/cert_authority.cpp
@@ -41,6 +53,11 @@ add_library(FluxGateCore
     src/mitm_tls.cpp
     src/proxy_server.cpp
 )
+if(FLUXGATE_REDIS)
+    list(APPEND FLUXGATE_SOURCES src/redis_cache.cpp)
+endif()
+
+add_library(FluxGateCore ${FLUXGATE_SOURCES})
 
 target_include_directories(FluxGateCore PUBLIC include)
 
@@ -51,6 +68,10 @@ else()
 endif()
 
 target_link_libraries(FluxGateCore PUBLIC OpenSSL::SSL OpenSSL::Crypto Threads::Threads simdjson tomlplusplus::tomlplusplus)
+if(FLUXGATE_REDIS)
+    target_link_libraries(FluxGateCore PUBLIC hiredis::hiredis)
+    target_compile_definitions(FluxGateCore PUBLIC FLUXGATE_HAS_REDIS)
+endif()
 target_compile_definitions(FluxGateCore PUBLIC ASIO_STANDALONE)
 
 add_executable(FluxGate src/main.cpp)
@@ -61,3 +82,7 @@ enable_testing()
 add_executable(FluxGateTests tests/unit_tests.cpp)
 target_link_libraries(FluxGateTests PRIVATE FluxGateCore)
 add_test(NAME FluxGateTests COMMAND FluxGateTests)
+
+add_executable(FluxGateIntegration tests/integration_tests.cpp)
+target_link_libraries(FluxGateIntegration PRIVATE FluxGateCore)
+add_test(NAME FluxGateIntegration COMMAND FluxGateIntegration)
