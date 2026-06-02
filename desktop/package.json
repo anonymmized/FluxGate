@@ -1,0 +1,33 @@
+{
+  "name": "fluxgate-desktop",
+  "version": "0.5.0",
+  "description": "FluxGate — native control panel for macOS & Linux",
+  "author": "FluxGate",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "dev.fluxgate.desktop",
+    "productName": "FluxGate",
+    "files": ["main.js", "preload.js", "renderer/**/*", "assets/**/*"],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg", "zip"],
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "category": "Development",
+      "target": ["AppImage", "deb"],
+      "icon": "assets/icon.png"
+    }
+  }
+}

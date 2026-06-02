@@ -97,6 +97,20 @@ h1 em{font-style:normal;background:linear-gradient(135deg,var(--purple-light),va
 .term-bar .ttl{margin-left:8px;font-size:.75rem;color:var(--muted);font-family:ui-monospace,monospace}
 .term pre{margin:0;padding:18px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;line-height:1.7;color:#cbd5e1;overflow-x:auto}
 .term .pl{color:var(--purple-light)}.term .gr{color:var(--green)}.term .cy{color:var(--cyan)}.term .ye{color:var(--yellow)}.term .dm{color:var(--muted)}
+/* CSS-structured terminal body (replaces fragile ASCII box-art) */
+.term-body{padding:18px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.84rem;color:#cbd5e1}
+.tprompt{margin-bottom:14px}
+.tcard{border:1px solid rgba(124,58,237,.45);border-radius:10px;padding:14px 16px;background:rgba(124,58,237,.05)}
+.tcard-hd{display:flex;align-items:center;gap:7px;font-size:.9rem;color:#fff;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid var(--border)}
+.tcard-hd .zap{filter:drop-shadow(0 0 5px rgba(167,139,250,.7))}
+.tcard-hd b{color:var(--purple-light);font-weight:700}
+.tsec{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:12px 0 7px}
+.tsec:first-of-type{margin-top:0}
+.trow{display:flex;align-items:center;gap:8px;padding:3px 0}
+.tlabel{color:var(--muted);min-width:62px}
+.tval{margin-left:auto}
+.tbar{flex:1;max-width:230px;height:8px;background:var(--surface2);border-radius:5px;overflow:hidden}
+.tbar-fill{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--green),var(--cyan))}
 
 /* STATS STRIP */
 .stats{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;padding:44px 24px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:72px}
@@ -244,19 +258,24 @@ footer a:hover{color:var(--text)}
     <button class="copy-btn" data-copy="#hero-cmd">Copy</button>
   </div>
 
-  <!-- terminal preview -->
+  <!-- terminal preview (CSS-structured so it always aligns) -->
   <div class="term">
     <div class="term-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="ttl">fluxgate — live</span></div>
-<pre><span class="dm">$</span> <span class="cy">fluxgate</span>
-<span class="pl">╔════════════════════════════════════════════════════╗</span>
-<span class="pl">║</span> <span class="pl">⚡ FluxGate</span>  ·  127.0.0.1:8080  ·  MITM <span class="gr">ON</span>          <span class="pl">║</span>
-<span class="pl">╠════════════════════════════════════════════════════╣</span>
-<span class="pl">║</span>  <span class="dm">CACHE</span>                                             <span class="pl">║</span>
-<span class="pl">║</span>   Hit rate  <span class="gr">██████████████████████</span><span class="dm">░░</span>  <span class="gr">93.2%</span>       <span class="pl">║</span>
-<span class="pl">║</span>   Hits  <span class="gr">137</span>      Misses  10                       <span class="pl">║</span>
-<span class="pl">║</span>  <span class="dm">SAVINGS / TRAFFIC</span>                                 <span class="pl">║</span>
-<span class="pl">║</span>   Tokens  <span class="pl">48.2K</span>     Cost  <span class="ye">$0.2410</span>               <span class="pl">║</span>
-<span class="pl">╚════════════════════════════════════════════════════╝</span></pre>
+    <div class="term-body">
+      <div class="tprompt"><span class="dm">$</span> <span class="cy">fluxgate</span></div>
+      <div class="tcard">
+        <div class="tcard-hd"><span class="zap">⚡</span> <b>FluxGate</b> <span class="dm">·</span> 127.0.0.1:8080 <span class="dm">·</span> MITM <span class="gr">ON</span></div>
+        <div class="tsec">CACHE</div>
+        <div class="trow"><span class="tlabel">Hit rate</span>
+          <span class="tbar"><span class="tbar-fill" style="width:93%"></span></span>
+          <span class="gr tval">93.2%</span></div>
+        <div class="trow"><span class="tlabel">Hits</span><span class="gr">137</span>
+          <span class="tlabel" style="margin-left:24px">Misses</span><span>10</span></div>
+        <div class="tsec">SAVINGS / TRAFFIC</div>
+        <div class="trow"><span class="tlabel">Tokens</span><span class="pl">48.2K</span>
+          <span class="tlabel" style="margin-left:24px">Cost</span><span class="ye">$0.2410</span></div>
+      </div>
+    </div>
   </div>
 </div>
 

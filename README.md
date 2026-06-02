@@ -97,6 +97,17 @@ The web control panel has four tabs:
 
 Admin endpoints: `GET /` (panel) · `/stats` · `/providers` · `/requests` · `/history` · `/metrics` (Prometheus) · `/healthz` · `POST /api/control` · `POST /api/cache/clear`. Set an admin `token` to require Bearer auth on all of them.
 
+### 🖥️ Desktop app (macOS & Linux)
+
+Prefer a native window over the browser? [`desktop/`](desktop/) is an Electron app
+with a sidebar UI that drives the same API — and can **start/stop the proxy** for you,
+streaming its logs.
+
+```sh
+cd desktop && npm install && npm start   # dev run
+npm run dist                              # build a .dmg / AppImage / .deb
+```
+
 ---
 
 ## ✨ Features

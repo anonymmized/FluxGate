@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src http://127.0.0.1:* http://localhost:*;">
+<title>FluxGate</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- TITLE BAR (draggable) -->
+<header class="titlebar">
+  <div class="tb-left">
+    <span class="zap">⚡</span><span class="brand">FluxGate</span>
+    <span class="ver">Control Panel</span>
+  </div>
+  <div class="tb-right">
+    <span class="conn" id="conn"><span class="conn-dot"></span><span id="conn-text">Connecting…</span></span>
+    <button class="run-btn" id="run-btn" data-state="stopped">Start proxy</button>
+  </div>
+</header>
+
+<div class="shell">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <button class="nav active" data-view="overview"><span class="ni">▦</span>Overview</button>
+    <button class="nav" data-view="requests"><span class="ni">≣</span>Requests</button>
+    <button class="nav" data-view="providers"><span class="ni">⬡</span>Providers</button>
+    <button class="nav" data-view="settings"><span class="ni">⚙</span>Settings</button>
+    <button class="nav" data-view="logs"><span class="ni">⌗</span>Logs</button>
+    <div class="sb-spacer"></div>
+    <a class="nav link" id="open-dash"><span class="ni">↗</span>Open in browser</a>
+    <a class="nav link" href="https://github.com/anonymmized/FluxGate" target="_blank"><span class="ni">★</span>GitHub</a>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="content">
+
+    <!-- OVERVIEW -->
+    <section class="view active" data-pane="overview">
+      <div class="vhead"><h1>Overview</h1><div class="ts" id="ts">—</div></div>
+      <div class="cards">
+        <div class="card act"><div class="c-ic">🔌</div><div class="c-l">Active Sessions</div><div class="c-v" id="c-active">—</div></div>
+        <div class="card hr"><div class="c-ic">🔁</div><div class="c-l">Cache Hit Rate</div><div class="c-v green" id="c-hr">—</div></div>
+        <div class="card tok"><div class="c-ic">✂️</div><div class="c-l">Tokens Saved</div><div class="c-v purple" id="c-tok">—</div></div>
+        <div class="card cost"><div class="c-ic">💰</div><div class="c-l">Cost Saved (est.)</div><div class="c-v yellow" id="c-cost">—</div></div>
+        <div class="card ce"><div class="c-ic">🗄️</div><div class="c-l">Cache Entries</div><div class="c-v cyan" id="c-ce">—</div></div>
+        <div class="card rl"><div class="c-ic">🚦</div><div class="c-l">Rate Limited</div><div class="c-v red" id="c-rl">—</div></div>
+      </div>
+      <div class="charts">
+        <div class="chart-box"><h3>Cache Hit Rate %</h3><canvas id="ch-hr" height="64"></canvas></div>
+        <div class="chart-box"><h3>Sessions / s</h3><canvas id="ch-sess" height="64"></canvas></div>
+      </div>
+      <div class="panel tablewrap">
+        <table><thead><tr><th>Metric</th><th>Value</th><th style="width:180px">Bar</th></tr></thead>
+        <tbody id="ov-body"></tbody></table>
+      </div>
+    </section>
+
+    <!-- REQUESTS -->
+    <section class="view" data-pane="requests">
+      <div class="vhead"><h1>Requests</h1><div class="hint">Live · newest first · body content is never captured</div></div>
+      <div class="panel tablewrap">
+        <table><thead><tr>
+          <th>Time</th><th>Provider</th><th>Method</th><th>Path</th><th>Model</th>
+          <th>Cache</th><th>Status</th><th>Latency</th><th>Saved</th>
+        </tr></thead><tbody id="req-body"></tbody></table>
+        <div class="empty" id="req-empty">No requests yet — send traffic through the proxy.</div>
+      </div>
+    </section>
+
+    <!-- PROVIDERS -->
+    <section class="view" data-pane="providers">
+      <div class="vhead"><h1>Providers</h1><div class="hint">Per-provider cost, hit rate and latency</div></div>
+      <div class="panel tablewrap">
+        <table><thead><tr>
+          <th>Provider</th><th>Requests</th><th>Hit Rate</th><th>Filtered</th>
+          <th>Tokens Saved</th><th>Cost Saved</th><th>Avg Latency</th><th>Traffic</th>
+        </tr></thead><tbody id="prov-body"></tbody></table>
+        <div class="empty" id="prov-empty">No provider traffic yet.</div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" data-pane="settings">
+      <div class="vhead"><h1>Settings</h1><div class="hint">Live controls apply to the running proxy with no restart</div></div>
+      <div class="grid2">
+        <div class="panel">
+          <h3>Connection</h3>
+          <div class="frow"><div><label>Admin API URL</label><div class="fhint">Where the dashboard API listens</div></div>
+            <input type="text" id="s-url" style="width:200px" placeholder="http://127.0.0.1:9090"></div>
+          <div class="frow"><div><label>Admin token</label><div class="fhint">Only if your proxy requires Bearer auth</div></div>
+            <input type="password" id="s-token" style="width:160px" placeholder="(none)"></div>
+        </div>
+        <div class="panel">
+          <h3>Launch options</h3>
+          <div class="frow"><div><label>Binary path</label><div class="fhint">Auto-detected; override if needed</div></div>
+            <input type="text" id="s-bin" style="width:200px"></div>
+          <div class="frow"><div><label>Extra arguments</label><div class="fhint">e.g. <code>--config ./fluxgate.toml</code></div></div>
+            <input type="text" id="s-args" style="width:200px" placeholder="--admin 127.0.0.1:9090"></div>
+        </div>
+        <div class="panel">
+          <h3>Filters</h3>
+          <div class="frow"><div><label>PII redaction</label><div class="fhint">Emails, cards, keys, IPs</div></div>
+            <label class="switch"><input type="checkbox" id="s-pii"><span class="slider"></span></label></div>
+          <div class="frow"><div><label>Max chat history</label><div class="fhint">0 = unlimited</div></div>
+            <input type="number" id="s-history" min="0"></div>
+        </div>
+        <div class="panel">
+          <h3>Cache</h3>
+          <div class="frow"><div><label>Cache enabled</label></div>
+            <label class="switch"><input type="checkbox" id="s-cache"><span class="slider"></span></label></div>
+          <div class="frow"><div><label>TTL (seconds)</label></div><input type="number" id="s-ttl" min="0"></div>
+          <div class="actions"><button class="btn danger" id="btn-clear">Clear cache now</button></div>
+        </div>
+        <div class="panel">
+          <h3>Rate limiting & budget</h3>
+          <div class="frow"><div><label>Requests / min / client</label><div class="fhint">0 = unlimited</div></div>
+            <input type="number" id="s-rpm" min="0"></div>
+          <div class="frow"><div><label>Burst</label></div><input type="number" id="s-burst" min="0"></div>
+          <div class="frow"><div><label>Monthly budget (USD)</label></div><input type="number" id="s-budget" min="0"></div>
+        </div>
+        <div class="panel">
+          <h3>Provider routing</h3>
+          <label class="fhint">Allowlist (one host per line, empty = all)</label>
+          <textarea id="s-allow"></textarea>
+          <label class="fhint">Denylist</label>
+          <textarea id="s-deny"></textarea>
+        </div>
+      </div>
+      <div class="actions"><button class="btn" id="btn-save">Save settings</button>
+        <button class="btn ghost" id="btn-reload">Reload from proxy</button></div>
+    </section>
+
+    <!-- LOGS -->
+    <section class="view" data-pane="logs">
+      <div class="vhead"><h1>Logs</h1><button class="btn ghost sm" id="btn-clearlog">Clear</button></div>
+      <pre class="logs" id="logs"></pre>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>
