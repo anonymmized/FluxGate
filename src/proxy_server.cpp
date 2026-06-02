@@ -9,10 +9,14 @@
 #include "fluxgate/filter.h"
 #include "fluxgate/http_message.h"
 #include "fluxgate/logger.h"
+#include "fluxgate/pricing.h"
+#include "fluxgate/rate_limiter.h"
+#include "fluxgate/runtime_controls.h"
 
 #include <asio/ssl.hpp>
 #include <openssl/ssl.h>
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <iostream>
@@ -28,6 +32,11 @@ using asio::ip::tcp;
 std::string buffer_to_string(const asio::streambuf::const_buffers_type& buffers, std::size_t bytes) {
     auto begin = asio::buffers_begin(buffers);
     return std::string(begin, begin + static_cast<std::ptrdiff_t>(bytes));
+}
+
+std::int64_t now_epoch_ms() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 // Extracts the HTTP status code from the first line of a buffered response.
@@ -89,6 +98,8 @@ public:
         SharedMitmServices mitm_services,
         std::shared_ptr<ICache> cache,
         std::shared_ptr<FilterPipeline> filter_pipeline,
+        std::shared_ptr<RuntimeControls> controls,
+        std::shared_ptr<RateLimiter> rate_limiter,
         std::uint64_t id)
         : client_socket_(std::move(client_socket)),
           upstream_socket_(client_socket_.get_executor()),
@@ -99,9 +110,15 @@ public:
           mitm_services_(std::move(mitm_services)),
           cache_(std::move(cache)),
           filter_pipeline_(std::move(filter_pipeline)),
+          controls_(std::move(controls)),
+          rate_limiter_(std::move(rate_limiter)),
           client_to_upstream_(config_.relay_buffer_bytes),
           upstream_to_client_(config_.relay_buffer_bytes),
-          id_(id) {}
+          id_(id) {
+        std::error_code ec;
+        const auto ep = client_socket_.remote_endpoint(ec);
+        if (!ec) client_ip_ = ep.address().to_string();
+    }
 
     ~Session() {
         if (metrics_) metrics_->on_session_closed();
@@ -126,6 +143,12 @@ private:
 
                     target_ = std::move(*target);
                     client_header_.consume(bytes);
+
+                    if (rate_limiter_ && !rate_limiter_->allow(client_ip_)) {
+                        metrics_->on_rate_limited();
+                        return reject("429 Too Many Requests");
+                    }
+
                     if (mitm_services_ && should_mitm(target_.host))
                         return accept_mitm_tunnel();
                     connect_to_upstream();
@@ -231,13 +254,7 @@ private:
 
     // Returns true if this host should be intercepted via MITM.
     bool should_mitm(const std::string& host) const {
-        for (const auto& h : config_.provider_denylist)
-            if (h == host) return false;
-        if (!config_.provider_allowlist.empty()) {
-            for (const auto& h : config_.provider_allowlist)
-                if (h == host) return true;
-            return false;
-        }
+        if (controls_) return controls_->should_mitm(host);
         return true;
     }
 
@@ -333,32 +350,80 @@ private:
     }
 
     void process_mitm_request(HttpRequestHead request, std::string body) {
+        pending_method_ = request.method;
+        pending_path_   = request.target;
+        pending_model_  = detect_model(body);
+        request_bytes_  = body.size();
+        const double price = input_price_per_million(target_.host, pending_model_);
+
         FilterContext ctx{target_.host, target_.port};
         if (filter_pipeline_) {
             auto result = filter_pipeline_->apply(ctx, request, body);
             if (result.rejected)
                 return write_mitm_error("403 Forbidden");
             if (result.modified) {
+                pending_filtered_ = true;
                 metrics_->on_request_filtered();
-                if (result.estimated_tokens_removed > 0)
+                if (result.estimated_tokens_removed > 0) {
+                    pending_tokens_saved_ += result.estimated_tokens_removed;
+                    const double cost = result.estimated_tokens_removed / 1'000'000.0 * price;
+                    pending_cost_saved_ += cost;
                     metrics_->add_estimated_tokens_saved(result.estimated_tokens_removed);
+                    metrics_->add_cost_saved(cost);
+                }
                 Logger::instance().filtered(id_, target_.host, request.method, request.target);
             }
         }
 
-        if (cache_) {
-            const auto key = cache_key(request.method, target_.host + request.target, body);
+        const bool cache_on = cache_ && controls_ && controls_->cache_enabled.load(std::memory_order_relaxed);
+        if (cache_on) {
+            const auto key = normalized_cache_key(request.method, target_.host + request.target, body);
             if (auto cached = cache_->get(key)) {
+                // A hit means the whole upstream call (and its input tokens) is avoided.
+                const auto saved_tokens = estimate_tokens(body.size());
+                const double saved_cost = saved_tokens / 1'000'000.0 * price;
+                pending_tokens_saved_ += saved_tokens;
+                pending_cost_saved_   += saved_cost;
                 metrics_->on_cache_hit();
+                metrics_->add_estimated_tokens_saved(saved_tokens);
+                metrics_->add_cost_saved(saved_cost);
                 Logger::instance().cache_hit(id_, target_.host, request.method, request.target);
-                return send_cached_response(std::make_shared<std::string>(std::move(*cached)));
+                pending_cache_outcome_ = "hit";
+                auto resp = std::make_shared<std::string>(std::move(*cached));
+                record_request("hit", parse_response_status(*resp), 0, resp->size());
+                return send_cached_response(resp);
             }
             metrics_->on_cache_miss();
             Logger::instance().cache_miss(id_, target_.host, request.method, request.target);
+            pending_cache_outcome_ = "miss";
             pending_cache_key_ = key;
+        } else {
+            pending_cache_outcome_ = "bypass";
         }
 
         connect_mitm_upstream(std::move(request), std::move(body));
+    }
+
+    // Appends one entry to the shared request log / per-provider rollup.
+    void record_request(std::string cache_outcome, int status,
+                        std::uint64_t latency_ms, std::uint64_t bytes_out) {
+        RequestRecord rec;
+        rec.id = id_;
+        rec.ts_ms = now_epoch_ms();
+        rec.host = target_.host;
+        rec.method = pending_method_;
+        rec.path = pending_path_;
+        rec.model = pending_model_;
+        rec.client = client_ip_;
+        rec.cache = std::move(cache_outcome);
+        rec.status = status;
+        rec.latency_ms = latency_ms;
+        rec.bytes_in = request_bytes_;
+        rec.bytes_out = bytes_out;
+        rec.tokens_saved = pending_tokens_saved_;
+        rec.cost_saved_usd = pending_cost_saved_;
+        rec.filtered = pending_filtered_;
+        metrics_->record_request(rec);
     }
 
     void send_cached_response(std::shared_ptr<std::string> response) {
@@ -435,8 +500,6 @@ private:
     }
 
     void forward_mitm_request(HttpRequestHead request, std::string body) {
-        pending_method_ = request.method;
-        pending_path_   = request.target;
         upstream_start_ = std::chrono::steady_clock::now();
 
         auto wire = std::make_shared<std::string>(
@@ -461,14 +524,19 @@ private:
                         maybe_cache_response(*response_buf);
                         const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::steady_clock::now() - upstream_start_).count();
-                        const int status = parse_response_status(*response_buf);
                         Logger::instance().forwarded(
                             id_, target_.host, pending_method_, pending_path_,
-                            status, static_cast<std::uint64_t>(ms));
+                            pending_status_, static_cast<std::uint64_t>(ms));
+                        record_request(pending_cache_outcome_, pending_status_,
+                                       static_cast<std::uint64_t>(ms), response_total_bytes_);
                         return shutdown_mitm_both();
                     }
 
                     metrics_->add_upstream_to_client_bytes(bytes);
+                    response_total_bytes_ += bytes;
+                    if (pending_status_ == 0 && bytes > 0)
+                        pending_status_ = parse_response_status(
+                            std::string(chunk->data(), std::min<std::size_t>(bytes, 64)));
 
                     if (cache_ && !pending_cache_key_.empty()
                         && response_buf->size() + bytes <= config_.max_body_bytes) {
@@ -494,8 +562,11 @@ private:
         if (!cache_ || pending_cache_key_.empty() || response.size() < 16) return;
         if (!response.starts_with("HTTP/")) return;
         if (response.find("text/event-stream") != std::string::npos) return;
+        const auto ttl = controls_
+            ? controls_->cache_ttl_seconds.load(std::memory_order_relaxed)
+            : config_.cache_ttl_seconds;
         cache_->put(pending_cache_key_, response,
-                    std::chrono::seconds(config_.cache_ttl_seconds));
+                    std::chrono::seconds(static_cast<long long>(ttl)));
         pending_cache_key_.clear();
     }
 
@@ -553,11 +624,14 @@ private:
     SharedMitmServices mitm_services_;
     std::shared_ptr<ICache> cache_;
     std::shared_ptr<FilterPipeline> filter_pipeline_;
+    std::shared_ptr<RuntimeControls> controls_;
+    std::shared_ptr<RateLimiter> rate_limiter_;
     std::vector<char> client_to_upstream_;
     std::vector<char> upstream_to_client_;
     ConnectTarget target_;
     std::string response_;
     std::uint64_t id_;
+    std::string client_ip_;
 
     // MITM-specific
     std::shared_ptr<asio::ssl::context> client_ssl_ctx_;
@@ -567,6 +641,14 @@ private:
     std::string pending_cache_key_;
     std::string pending_method_;
     std::string pending_path_;
+    std::string pending_model_;
+    std::string pending_cache_outcome_ = "bypass";
+    std::uint64_t request_bytes_ = 0;
+    std::uint64_t response_total_bytes_ = 0;
+    std::uint64_t pending_tokens_saved_ = 0;
+    double pending_cost_saved_ = 0.0;
+    int pending_status_ = 0;
+    bool pending_filtered_ = false;
     std::chrono::steady_clock::time_point upstream_start_;
 };
 
@@ -578,11 +660,18 @@ ProxyServer::ProxyServer(asio::io_context& io_context, AppConfig config, SharedM
       metrics_(std::make_shared<Metrics>()),
       mitm_services_(std::move(mitm_services)) {
 
+    controls_ = std::make_shared<RuntimeControls>(config_);
+    rate_limiter_ = std::make_shared<RateLimiter>();
+    rate_limiter_->configure(config_.rate_limit_rpm, config_.rate_limit_burst);
+
+    // Both filters are always present; they read RuntimeControls on each request
+    // so the dashboard can toggle them (and the history limit) live.
+    std::vector<CustomRedactionRule> custom;
+    for (const auto& [pat, rep] : config_.custom_redaction_rules)
+        custom.push_back({pat, rep});
     filter_pipeline_ = std::make_shared<FilterPipeline>();
-    if (config_.enable_pii_redaction)
-        filter_pipeline_->add(std::make_unique<PiiRedactionFilter>());
-    if (config_.max_chat_history > 0)
-        filter_pipeline_->add(std::make_unique<ChatHistoryLimitFilter>(config_.max_chat_history));
+    filter_pipeline_->add(std::make_unique<PiiRedactionFilter>(controls_, custom));
+    filter_pipeline_->add(std::make_unique<ChatHistoryLimitFilter>(controls_));
 
     if (config_.enable_cache) {
         if (config_.cache_backend == "redis") {
@@ -624,7 +713,7 @@ void ProxyServer::do_accept() {
             metrics_->on_session_accepted();
             std::make_shared<Session>(
                 std::move(socket), config_, metrics_, mitm_services_,
-                cache_, filter_pipeline_, id)->start();
+                cache_, filter_pipeline_, controls_, rate_limiter_, id)->start();
         } else {
             std::cerr << "accept failed: " << ec.message() << '\n';
         }
@@ -638,6 +727,18 @@ MetricsSnapshot ProxyServer::metrics() const {
 
 std::shared_ptr<Metrics> ProxyServer::shared_metrics() const {
     return metrics_;
+}
+
+std::shared_ptr<RuntimeControls> ProxyServer::shared_controls() const {
+    return controls_;
+}
+
+std::shared_ptr<RateLimiter> ProxyServer::shared_rate_limiter() const {
+    return rate_limiter_;
+}
+
+std::shared_ptr<ICache> ProxyServer::shared_cache() const {
+    return cache_;
 }
 
 } // namespace fluxgate

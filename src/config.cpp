@@ -60,6 +60,22 @@ AppConfig load_config_file(const std::string& path) {
     if (auto filters = tbl["filters"].as_table()) {
         if (auto v = (*filters)["pii_redaction"].value<bool>()) cfg.enable_pii_redaction = *v;
         if (auto v = (*filters)["max_chat_history"].value<int64_t>()) cfg.max_chat_history = static_cast<std::size_t>(*v);
+        // custom_rules = [ { pattern = "...", replacement = "..." }, ... ]
+        if (auto arr = (*filters)["custom_rules"].as_array()) {
+            for (auto& elem : *arr) {
+                if (auto rule = elem.as_table()) {
+                    auto pat = (*rule)["pattern"].value<std::string>();
+                    auto rep = (*rule)["replacement"].value<std::string>();
+                    if (pat) cfg.custom_redaction_rules.emplace_back(*pat, rep.value_or("[REDACTED]"));
+                }
+            }
+        }
+    }
+
+    if (auto limits = tbl["limits"].as_table()) {
+        if (auto v = (*limits)["rate_limit_rpm"].value<int64_t>()) cfg.rate_limit_rpm = static_cast<std::size_t>(*v);
+        if (auto v = (*limits)["rate_limit_burst"].value<int64_t>()) cfg.rate_limit_burst = static_cast<std::size_t>(*v);
+        if (auto v = (*limits)["monthly_budget_usd"].value<double>()) cfg.monthly_budget_usd = *v;
     }
 
     if (auto cache = tbl["cache"].as_table()) {
@@ -101,6 +117,7 @@ std::string usage(std::string_view program_name) {
         + "       [--no-cache] [--cache-max-entries n] [--cache-ttl seconds]\n"
         + "       [--admin host:port] [--no-admin]\n"
         + "       [--max-body bytes] [--no-pii] [--max-history n]\n"
+        + "       [--rate-limit rpm] [--rate-limit-burst n] [--monthly-budget usd]\n"
         + "       [--allow host] [--deny host]\n"
         + "       [--generate-ca prefix] [--ca-common-name name] [--ca-valid-days days]\n"
         + "       [--mitm --mitm-ca-key path --mitm-ca-cert path]\n"
@@ -155,6 +172,17 @@ AppConfig parse_args(int argc, char* argv[]) {
             config.enable_pii_redaction = false;
         } else if (arg == "--max-history") {
             config.max_chat_history = parse_size(require_value(arg), "max chat history");
+        } else if (arg == "--rate-limit") {
+            config.rate_limit_rpm = parse_size(require_value(arg), "rate limit rpm");
+        } else if (arg == "--rate-limit-burst") {
+            config.rate_limit_burst = parse_size(require_value(arg), "rate limit burst");
+        } else if (arg == "--monthly-budget") {
+            const auto v = require_value(arg);
+            try {
+                config.monthly_budget_usd = std::stod(std::string(v));
+            } catch (...) {
+                throw std::invalid_argument("invalid monthly budget: " + std::string(v));
+            }
         } else if (arg == "--allow") {
             config.provider_allowlist.emplace_back(require_value(arg));
         } else if (arg == "--deny") {
@@ -237,7 +265,12 @@ std::string dump_config_toml(const AppConfig& c) {
         << "leaf_valid_days    = " << c.mitm_leaf_valid_days << "\n\n"
         << "[filters]\n"
         << "pii_redaction    = " << (c.enable_pii_redaction ? "true" : "false") << "\n"
-        << "max_chat_history = " << c.max_chat_history << "\n\n"
+        << "max_chat_history = " << c.max_chat_history << "\n"
+        << "# custom_rules = [ { pattern = \"secret-\\\\w+\", replacement = \"[REDACTED]\" } ]\n\n"
+        << "[limits]\n"
+        << "rate_limit_rpm     = " << c.rate_limit_rpm << "   # 0 = unlimited\n"
+        << "rate_limit_burst   = " << c.rate_limit_burst << "   # 0 = defaults to rpm\n"
+        << "monthly_budget_usd = " << c.monthly_budget_usd << "   # 0 = no budget alert\n\n"
         << "[cache]\n"
         << "enabled     = " << (c.enable_cache ? "true" : "false") << "\n"
         << "backend     = \"" << c.cache_backend << "\"  # \"memory\" or \"redis\"\n"

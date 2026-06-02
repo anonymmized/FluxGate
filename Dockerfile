@@ -20,8 +20,9 @@ RUN cmake -S . -B /build -DCMAKE_BUILD_TYPE=Release \
 # ──────────────────────────────────────────────
 FROM debian:bookworm-slim
 
+# wget is used by the docker-compose healthcheck (GET /healthz).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl3 ca-certificates \
+    libssl3 ca-certificates wget \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/FluxGate /usr/local/bin/fluxgate
@@ -29,9 +30,13 @@ COPY --from=builder /build/FluxGate /usr/local/bin/fluxgate
 # Proxy port | Admin/metrics port
 EXPOSE 8080 9090
 
-# Expects CA key/cert to be mounted at /certs/ or provided via env.
-# Example: docker run -v ./certs:/certs fluxgate \
-#   --mitm --mitm-ca-key /certs/ca.key.pem --mitm-ca-cert /certs/ca.cert.pem
+# Mount a CA at /certs (generate once with: --generate-ca /certs/ca).
+# IMPORTANT: inside a container the listeners must bind 0.0.0.0, otherwise
+# Docker's published ports can't reach them and `curl -x` fails with a reset.
+# Example:
+#   docker run -v ./certs:/certs -p 8080:8080 -p 9090:9090 fluxgate \
+#     --listen 0.0.0.0 --admin 0.0.0.0:9090 \
+#     --mitm --mitm-ca-key /certs/ca.key.pem --mitm-ca-cert /certs/ca.cert.pem
 
 ENTRYPOINT ["/usr/local/bin/fluxgate"]
 CMD ["--help"]

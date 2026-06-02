@@ -1,6 +1,9 @@
 #pragma once
 
+#include "fluxgate/icache.h"
 #include "fluxgate/metrics.h"
+#include "fluxgate/rate_limiter.h"
+#include "fluxgate/runtime_controls.h"
 
 #include <asio.hpp>
 
@@ -26,9 +29,14 @@ private:
 class AdminServer final {
 public:
     AdminServer(asio::io_context& io_context, std::string host, unsigned short port,
-                std::shared_ptr<Metrics> metrics, std::string token = {});
+                std::shared_ptr<Metrics> metrics,
+                std::shared_ptr<RuntimeControls> controls = nullptr,
+                std::shared_ptr<ICache> cache = nullptr,
+                std::shared_ptr<RateLimiter> rate_limiter = nullptr,
+                std::string token = {});
 
-    // Call once per second from the main loop to record a history point.
+    // Call once per second from the main loop to record a history point and
+    // refresh the live cache-entry gauge.
     void tick();
 
 private:
@@ -36,6 +44,9 @@ private:
 
     asio::ip::tcp::acceptor acceptor_;
     std::shared_ptr<Metrics> metrics_;
+    std::shared_ptr<RuntimeControls> controls_;
+    std::shared_ptr<ICache> cache_;
+    std::shared_ptr<RateLimiter> rate_limiter_;
     std::string token_;
     MetricsHistory history_;
 };

@@ -123,7 +123,9 @@ int main(int argc, char* argv[]) {
         if (config.enable_admin) {
             admin_server = std::make_unique<fluxgate::AdminServer>(
                 io_context, config.admin_host, config.admin_port,
-                server.shared_metrics(), config.admin_token);
+                server.shared_metrics(), server.shared_controls(),
+                server.shared_cache(), server.shared_rate_limiter(),
+                config.admin_token);
         }
 
         // ── TUI (only in interactive/TTY mode) ────────────────────────────
@@ -170,7 +172,15 @@ int main(int argc, char* argv[]) {
         std::cout << e.what() << '\n';
         return EXIT_SUCCESS;
     } catch (const std::exception& e) {
-        std::cerr << "\033[31mError:\033[0m " << e.what() << '\n';
+        const std::string msg = e.what();
+        if (msg.find("Address already in use") != std::string::npos) {
+            std::cerr << "\033[31m✗ Port already in use.\033[0m "
+                      << "FluxGate (or another program) is already running on that port.\n\n"
+                      << "  Stop the existing FluxGate:   \033[36mpkill -if fluxgate\033[0m\n"
+                      << "  Or pick different ports:      \033[36mfluxgate --port 8081 --admin 127.0.0.1:9091\033[0m\n";
+        } else {
+            std::cerr << "\033[31mError:\033[0m " << msg << '\n';
+        }
         return EXIT_FAILURE;
     }
     return EXIT_SUCCESS;

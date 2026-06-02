@@ -1,16 +1,35 @@
 services:
+  # One-time CA generation: writes ./certs/ca.key.pem and ./certs/ca.cert.pem.
+  # Run once:  docker compose run --rm fluxgate-init
+  fluxgate-init:
+    build: .
+    image: fluxgate:latest
+    profiles: ["init"]
+    volumes:
+      - ./certs:/certs
+    command: ["--generate-ca", "/certs/ca"]
+
   fluxgate:
     build: .
     image: fluxgate:latest
+    container_name: fluxgate
     ports:
       - "8080:8080"   # proxy
-      - "9090:9090"   # admin / metrics
+      - "9090:9090"   # admin / metrics / dashboard
     volumes:
       - ./certs:/certs:ro
-      - ./fluxgate.toml:/etc/fluxgate/config.toml:ro
+    # Bind 0.0.0.0 inside the container — otherwise Docker's published
+    # ports cannot reach the listener and `curl -x` fails with a reset.
     command:
-      - --config
-      - /etc/fluxgate/config.toml
+      - --listen
+      - 0.0.0.0
+      - --admin
+      - 0.0.0.0:9090
+      - --mitm
+      - --mitm-ca-key
+      - /certs/ca.key.pem
+      - --mitm-ca-cert
+      - /certs/ca.cert.pem
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/healthz"]

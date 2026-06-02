@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FluxGate — Cut Your LLM API Bill by 40–70%</title>
-<meta name="description" content="High-performance C++ proxy that sits between your app and OpenAI / Anthropic / Gemini. Filters, deduplicates, and caches AI traffic. Zero code changes required.">
+<meta name="description" content="High-performance C++20 proxy that sits between your app and OpenAI / Anthropic / Gemini. Caches, deduplicates, and filters AI traffic locally. Zero code changes.">
 <meta property="og:title" content="FluxGate — Cut Your LLM API Bill by 40–70%">
-<meta property="og:description" content="Open-source HTTPS proxy for LLM APIs. Cache identical queries, strip PII, truncate chat history. Works with any language, any framework.">
+<meta property="og:description" content="Open-source HTTPS proxy for LLM APIs. Cache identical queries, strip PII, trim chat history. Works with any language, any framework. Zero code changes.">
 <meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0d14">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
 <style>
 :root {
   --bg: #0b0d14;
@@ -25,41 +27,79 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
 a{color:var(--purple-light);text-decoration:none}
 a:hover{text-decoration:underline}
+::selection{background:rgba(124,58,237,.4)}
+
+/* scroll progress bar */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:200;
+  background:linear-gradient(90deg,var(--purple),var(--cyan));box-shadow:0 0 10px rgba(124,58,237,.7);transition:width .1s linear}
+
+/* ambient gradient glow behind hero */
+.glow{position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:900px;height:600px;
+  background:radial-gradient(ellipse at center,rgba(124,58,237,.25),transparent 60%);
+  filter:blur(40px);pointer-events:none;z-index:0;animation:float 14s ease-in-out infinite}
+@keyframes float{0%,100%{opacity:.7;transform:translateX(-50%) translateY(0)}50%{opacity:1;transform:translateX(-50%) translateY(30px)}}
+
+/* aurora: slow-moving colour blobs layered behind the whole page */
+.aurora{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.aurora i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;mix-blend-mode:screen}
+.aurora .a1{width:520px;height:520px;background:radial-gradient(circle,rgba(124,58,237,.5),transparent 70%);top:-120px;left:-80px;animation:a1 22s ease-in-out infinite}
+.aurora .a2{width:460px;height:460px;background:radial-gradient(circle,rgba(34,211,238,.4),transparent 70%);top:30%;right:-120px;animation:a2 26s ease-in-out infinite}
+.aurora .a3{width:400px;height:400px;background:radial-gradient(circle,rgba(74,222,128,.28),transparent 70%);bottom:-100px;left:30%;animation:a3 30s ease-in-out infinite}
+@keyframes a1{0%,100%{transform:translate(0,0)}50%{transform:translate(120px,80px)}}
+@keyframes a2{0%,100%{transform:translate(0,0)}50%{transform:translate(-100px,60px)}}
+@keyframes a3{0%,100%{transform:translate(0,0)}50%{transform:translate(80px,-70px)}}
+@media(prefers-reduced-motion:reduce){.aurora i,.glow{animation:none}}
+
+/* gradient-text shimmer on the hero word */
+h1 em{background-size:200% auto;animation:shimmer 6s linear infinite}
+@keyframes shimmer{to{background-position:200% center}}
 
 /* NAV */
-nav{position:sticky;top:0;z-index:100;background:rgba(11,13,20,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px}
+nav{position:sticky;top:0;z-index:100;background:rgba(11,13,20,.8);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:60px}
 .logo{font-weight:700;font-size:1.1rem;color:#fff;display:flex;align-items:center;gap:8px}
+.logo .zap{filter:drop-shadow(0 0 6px rgba(167,139,250,.7))}
 .logo span{color:var(--purple-light)}
 .nav-links{display:flex;gap:24px;font-size:.9rem}
 .nav-links a{color:var(--muted)}
 .nav-links a:hover{color:var(--text);text-decoration:none}
-.gh-btn{background:var(--surface2);border:1px solid var(--border);padding:6px 16px;border-radius:8px;color:var(--text)!important;font-size:.85rem;display:flex;align-items:center;gap:6px}
+.gh-btn{background:var(--surface2);border:1px solid var(--border);padding:6px 16px;border-radius:8px;color:var(--text)!important;font-size:.85rem;display:flex;align-items:center;gap:6px;transition:border-color .2s}
 .gh-btn:hover{border-color:var(--purple);text-decoration:none!important}
 
 /* HERO */
-.hero{text-align:center;padding:96px 24px 80px;max-width:860px;margin:0 auto}
+.hero{position:relative;z-index:1;text-align:center;padding:96px 24px 72px;max-width:880px;margin:0 auto}
 .badge{display:inline-flex;align-items:center;gap:6px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.4);color:var(--purple-light);padding:4px 14px;border-radius:999px;font-size:.8rem;margin-bottom:28px}
-h1{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-bottom:20px}
+.badge .live{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(74,222,128,.4)}50%{opacity:.5;box-shadow:0 0 0 5px rgba(74,222,128,0)}}
+h1{font-size:clamp(2.1rem,5.5vw,3.6rem);font-weight:800;letter-spacing:-.02em;line-height:1.08;margin-bottom:20px}
 h1 em{font-style:normal;background:linear-gradient(135deg,var(--purple-light),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.hero-sub{font-size:1.15rem;color:var(--muted);max-width:600px;margin:0 auto 40px}
-.hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:56px}
-.btn-primary{background:var(--purple);color:#fff!important;padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem;transition:background .2s}
-.btn-primary:hover{background:#6d28d9;text-decoration:none!important}
-.btn-secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)!important;padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem}
-.btn-secondary:hover{border-color:var(--purple);text-decoration:none!important}
+.hero-sub{font-size:1.15rem;color:#94a3b8;max-width:620px;margin:0 auto 36px}
+.hero-actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:44px}
+.btn-primary{background:var(--purple);color:#fff!important;padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem;transition:transform .15s,box-shadow .2s,background .2s;box-shadow:0 6px 24px -8px rgba(124,58,237,.8)}
+.btn-primary:hover{background:#6d28d9;text-decoration:none!important;transform:translateY(-2px);box-shadow:0 10px 30px -8px rgba(124,58,237,.9)}
+.btn-secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)!important;padding:12px 28px;border-radius:10px;font-weight:600;font-size:1rem;transition:border-color .2s,transform .15s}
+.btn-secondary:hover{border-color:var(--purple);text-decoration:none!important;transform:translateY(-2px)}
 
-/* INSTALL BOX */
-.install-box{background:var(--code-bg);border:1px solid var(--border);border-radius:12px;padding:16px 24px;display:inline-flex;align-items:center;gap:16px;font-family:monospace;font-size:.9rem;color:#94a3b8;max-width:100%;text-align:left}
+/* COPYABLE INSTALL ONE-LINER */
+.install-box{background:var(--code-bg);border:1px solid var(--border);border-radius:12px;padding:14px 16px 14px 20px;display:inline-flex;align-items:center;gap:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9rem;color:#94a3b8;max-width:100%;text-align:left}
 .install-box .prompt{color:var(--purple-light)}
 .install-box code{color:#e2e8f0;word-break:break-all}
-.copy-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 10px;border-radius:6px;font-size:.75rem;cursor:pointer;white-space:nowrap;font-family:inherit}
-.copy-btn:hover{color:var(--text)}
+.copy-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:5px 12px;border-radius:6px;font-size:.75rem;cursor:pointer;white-space:nowrap;font-family:inherit;transition:color .2s,border-color .2s}
+.copy-btn:hover{color:var(--text);border-color:var(--purple)}
+
+/* TERMINAL MOCK */
+.term{max-width:680px;margin:48px auto 0;background:var(--code-bg);border:1px solid var(--border);border-radius:12px;overflow:hidden;text-align:left;box-shadow:0 30px 80px -30px rgba(0,0,0,.8)}
+.term-bar{display:flex;align-items:center;gap:7px;padding:11px 16px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.term-bar i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.term-bar .r{background:#ff5f56}.term-bar .y{background:#ffbd2e}.term-bar .g{background:#27c93f}
+.term-bar .ttl{margin-left:8px;font-size:.75rem;color:var(--muted);font-family:ui-monospace,monospace}
+.term pre{margin:0;padding:18px 20px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;line-height:1.7;color:#cbd5e1;overflow-x:auto}
+.term .pl{color:var(--purple-light)}.term .gr{color:var(--green)}.term .cy{color:var(--cyan)}.term .ye{color:var(--yellow)}.term .dm{color:var(--muted)}
 
 /* STATS STRIP */
-.stats{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;padding:48px 24px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.stats{display:flex;justify-content:center;gap:48px;flex-wrap:wrap;padding:44px 24px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:72px}
 .stat{text-align:center}
 .stat-val{font-size:2.2rem;font-weight:800;color:#fff}
 .stat-val.green{color:var(--green)}
@@ -69,8 +109,12 @@ h1 em{font-style:normal;background:linear-gradient(135deg,var(--purple-light),va
 
 /* SECTION */
 section{padding:80px 24px;max-width:1100px;margin:0 auto}
-h2{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;margin-bottom:12px}
-.section-sub{color:var(--muted);font-size:1rem;margin-bottom:48px;max-width:540px}
+h2{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;margin-bottom:12px;letter-spacing:-.01em}
+.section-sub{color:var(--muted);font-size:1rem;margin-bottom:48px;max-width:560px}
+
+/* reveal-on-scroll */
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.reveal.in{opacity:1;transform:none}
 
 /* HOW IT WORKS */
 .flow{display:flex;align-items:center;gap:0;flex-wrap:wrap;justify-content:center;margin-top:40px}
@@ -79,22 +123,51 @@ h2{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;margin-bottom:12px}
 .flow-box .name{font-weight:600;font-size:.95rem}
 .flow-box .desc{font-size:.78rem;color:var(--muted);margin-top:4px}
 .flow-arrow{color:var(--purple-light);font-size:1.4rem;padding:0 8px}
-.flow-middle{background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(34,211,238,.1));border-color:var(--purple);position:relative}
-.flow-middle::after{content:"intercepts + filters + caches";position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:.7rem;color:var(--purple-light);white-space:nowrap}
+.flow-middle{background:linear-gradient(135deg,rgba(124,58,237,.18),rgba(34,211,238,.1));border-color:var(--purple);position:relative}
+.flow-middle::after{content:"intercept · filter · cache";position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:.7rem;color:var(--purple-light);white-space:nowrap}
 
 /* FEATURES */
 .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
-.feature{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px}
+.feature{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;transition:border-color .2s,transform .2s}
+.feature:hover{border-color:var(--purple);transform:translateY(-3px)}
 .feature-icon{font-size:1.6rem;margin-bottom:12px}
 .feature h3{font-size:1rem;font-weight:600;margin-bottom:6px}
 .feature p{font-size:.85rem;color:var(--muted);line-height:1.5}
+.feature code{font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px}
+/* cursor-follow glow inside feature cards */
+.feature{position:relative}
+.feature::after{content:"";position:absolute;inset:0;border-radius:12px;opacity:0;transition:opacity .3s;pointer-events:none;
+  background:radial-gradient(360px circle at var(--mx,50%) var(--my,50%),rgba(124,58,237,.16),transparent 45%)}
+.feature:hover::after{opacity:1}
 
-/* CODE BLOCK */
-.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:12px;padding:20px 24px;font-family:monospace;font-size:.85rem;line-height:1.7;overflow-x:auto}
+/* SAVINGS CALCULATOR */
+.calc{background:linear-gradient(135deg,rgba(124,58,237,.12),var(--surface));border:1px solid var(--border);border-radius:18px;padding:36px;display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center}
+.calc-controls label{display:block;font-size:.8rem;color:var(--muted);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.05em}
+.calc-controls label:first-child{margin-top:0}
+.calc input[type=range]{width:100%;accent-color:var(--purple);height:5px}
+.calc .val{font-weight:700;color:var(--pl);font-variant-numeric:tabular-nums}
+.calc-out{text-align:center;border-left:1px solid var(--border);padding-left:32px}
+.calc-out .big{font-size:clamp(2.4rem,6vw,3.6rem);font-weight:800;background:linear-gradient(135deg,var(--green),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-variant-numeric:tabular-nums;line-height:1.05}
+.calc-out .cap{font-size:.85rem;color:var(--muted);margin-top:6px}
+.calc-out .sub{font-size:.95rem;color:var(--text);margin-top:18px}
+.calc-out .sub b{color:var(--pl)}
+@media(max-width:680px){.calc{grid-template-columns:1fr;gap:24px}.calc-out{border-left:none;border-top:1px solid var(--border);padding-left:0;padding-top:24px}}
+
+/* CODE BLOCK + TABS */
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:7px 16px;border-radius:8px;font-size:.85rem;cursor:pointer;font-weight:500;transition:all .2s}
+.tab.active{background:rgba(124,58,237,.18);border-color:var(--purple);color:var(--purple-light)}
+.code-wrap{position:relative}
+.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:12px;padding:20px 24px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85rem;line-height:1.75;overflow-x:auto;white-space:pre}
 .code-block .c{color:var(--muted)}
 .code-block .k{color:var(--purple-light)}
 .code-block .s{color:var(--green)}
 .code-block .n{color:var(--cyan)}
+.code-copy{position:absolute;top:12px;right:12px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);padding:4px 12px;border-radius:6px;font-size:.72rem;cursor:pointer;font-family:system-ui,sans-serif;transition:color .2s,border-color .2s}
+.code-copy:hover{color:var(--text);border-color:var(--purple)}
+.tabpane{display:none}
+.tabpane.active{display:block}
+.note{font-size:.8rem;color:var(--muted);margin-top:10px}
 
 /* PRICING */
 .pricing{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}
@@ -107,16 +180,19 @@ h2{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;margin-bottom:12px}
 .plan ul{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:28px}
 .plan li{font-size:.88rem;display:flex;gap:8px;align-items:flex-start}
 .plan li::before{content:"✓";color:var(--green);font-weight:700;flex-shrink:0}
-.plan-cta{display:block;text-align:center;padding:12px;border-radius:10px;font-weight:600;font-size:.95rem}
+.plan-cta{display:block;text-align:center;padding:12px;border-radius:10px;font-weight:600;font-size:.95rem;transition:opacity .2s}
 .plan-cta.primary{background:var(--purple);color:#fff!important}
 .plan-cta.secondary{background:var(--surface2);border:1px solid var(--border);color:var(--text)!important}
-.plan-cta:hover{text-decoration:none!important;opacity:.9}
+.plan-cta:hover{text-decoration:none!important;opacity:.88}
 
 /* FAQ */
-.faq{display:flex;flex-direction:column;gap:16px;max-width:720px}
-.faq-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 24px}
-.faq-q{font-weight:600;margin-bottom:8px}
-.faq-a{font-size:.88rem;color:var(--muted)}
+.faq{display:flex;flex-direction:column;gap:12px;max-width:760px}
+.faq-item{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.faq-q{font-weight:600;padding:18px 22px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:12px;list-style:none}
+.faq-q::-webkit-details-marker{display:none}
+.faq-q::after{content:"+";color:var(--purple-light);font-size:1.3rem;font-weight:400;transition:transform .2s}
+details[open] .faq-q::after{transform:rotate(45deg)}
+.faq-a{font-size:.88rem;color:var(--muted);padding:0 22px 20px}
 
 /* FOOTER */
 footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center;color:var(--muted);font-size:.85rem}
@@ -133,56 +209,95 @@ footer a:hover{color:var(--text)}
 </head>
 <body>
 
+<div id="progress"></div>
+<div class="aurora"><i class="a1"></i><i class="a2"></i><i class="a3"></i></div>
+<div class="glow"></div>
+
 <!-- NAV -->
 <nav>
-  <div class="logo">⚡ <span>FluxGate</span></div>
+  <div class="logo"><span class="zap">⚡</span> <span>FluxGate</span></div>
   <div class="nav-links">
     <a href="#how-it-works">How it works</a>
     <a href="#features">Features</a>
+    <a href="#install">Install</a>
     <a href="#pricing">Pricing</a>
-    <a href="https://github.com/anonymmized/FluxGate">Docs</a>
+    <a href="https://github.com/anonymmized/FluxGate#readme">Docs</a>
   </div>
-  <a href="https://github.com/anonymmized/FluxGate" class="gh-btn">
-    ★ GitHub
-  </a>
+  <a href="https://github.com/anonymmized/FluxGate" class="gh-btn">★ GitHub</a>
 </nav>
 
 <!-- HERO -->
 <div class="hero">
-  <div class="badge">⚡ Open-source · C++20 · <span>v0.2.0</span></div>
+  <div class="badge"><span class="live"></span> Open-source · C++20 · <span>v0.4.1</span></div>
   <h1>Cut your <em>LLM API bill</em><br>by 40–70%</h1>
   <p class="hero-sub">
-    A transparent HTTPS proxy that sits between your app and OpenAI, Anthropic, or Gemini.
-    Zero code changes. Caches identical queries, strips PII, trims chat history.
+    A transparent HTTPS proxy that sits between your app and OpenAI, Anthropic, Gemini, Mistral or Groq.
+    Caches identical queries, strips PII, trims chat history — locally, with sub-millisecond overhead. Zero code changes.
   </p>
   <div class="hero-actions">
     <a href="#install" class="btn-primary">Get started — free</a>
-    <a href="https://github.com/anonymmized/FluxGate" class="btn-secondary">View on GitHub</a>
+    <a href="https://github.com/anonymmized/FluxGate" class="btn-secondary">★ Star on GitHub</a>
   </div>
-  <div class="install-box" id="hero-install">
+  <div class="install-box">
     <span class="prompt">$</span>
-    <code>curl -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash</code>
-    <button class="copy-btn" onclick="copyInstall()">Copy</button>
+    <code id="hero-cmd">curl -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash</code>
+    <button class="copy-btn" data-copy="#hero-cmd">Copy</button>
+  </div>
+
+  <!-- terminal preview -->
+  <div class="term">
+    <div class="term-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span class="ttl">fluxgate — live</span></div>
+<pre><span class="dm">$</span> <span class="cy">fluxgate</span>
+<span class="pl">╔════════════════════════════════════════════════════╗</span>
+<span class="pl">║</span> <span class="pl">⚡ FluxGate</span>  ·  127.0.0.1:8080  ·  MITM <span class="gr">ON</span>          <span class="pl">║</span>
+<span class="pl">╠════════════════════════════════════════════════════╣</span>
+<span class="pl">║</span>  <span class="dm">CACHE</span>                                             <span class="pl">║</span>
+<span class="pl">║</span>   Hit rate  <span class="gr">██████████████████████</span><span class="dm">░░</span>  <span class="gr">93.2%</span>       <span class="pl">║</span>
+<span class="pl">║</span>   Hits  <span class="gr">137</span>      Misses  10                       <span class="pl">║</span>
+<span class="pl">║</span>  <span class="dm">SAVINGS / TRAFFIC</span>                                 <span class="pl">║</span>
+<span class="pl">║</span>   Tokens  <span class="pl">48.2K</span>     Cost  <span class="ye">$0.2410</span>               <span class="pl">║</span>
+<span class="pl">╚════════════════════════════════════════════════════╝</span></pre>
   </div>
 </div>
 
 <!-- STATS -->
 <div class="stats">
   <div class="stat"><div class="stat-val green">40–70%</div><div class="stat-label">API cost reduction</div></div>
-  <div class="stat"><div class="stat-val purple">&lt;1ms</div><div class="stat-label">Cache hit latency</div></div>
-  <div class="stat"><div class="stat-val yellow">0</div><div class="stat-label">Code changes required</div></div>
-  <div class="stat"><div class="stat-val">10k+</div><div class="stat-label">Concurrent sessions</div></div>
+  <div class="stat"><div class="stat-val purple">&lt;1ms</div><div class="stat-label">Cache-hit latency</div></div>
+  <div class="stat"><div class="stat-val yellow">0</div><div class="stat-label">Code changes</div></div>
+  <div class="stat"><div class="stat-val" data-count="10000" data-suffix="+">10k+</div><div class="stat-label">Concurrent sessions</div></div>
 </div>
 
+<!-- SAVINGS CALCULATOR -->
+<section id="calculator" class="reveal">
+  <h2>See what you'd save</h2>
+  <p class="section-sub">Drag the sliders to estimate your monthly savings. Real numbers depend on your traffic — duplicate requests and long chat histories save the most.</p>
+  <div class="calc">
+    <div class="calc-controls">
+      <label>Monthly LLM API spend — <span class="val" id="cv-spend">$5,000</span></label>
+      <input type="range" id="r-spend" min="100" max="100000" step="100" value="5000">
+      <label>Duplicate / cacheable requests — <span class="val" id="cv-dup">35%</span></label>
+      <input type="range" id="r-dup" min="0" max="80" step="1" value="35">
+      <label>Long conversations trimmed by history limit — <span class="val" id="cv-trim">20%</span></label>
+      <input type="range" id="r-trim" min="0" max="60" step="1" value="20">
+    </div>
+    <div class="calc-out">
+      <div class="big" id="cv-save">$2,150</div>
+      <div class="cap">estimated monthly savings</div>
+      <div class="sub">That's <b id="cv-year">$25,800</b> a year, at a <b id="cv-pct">43%</b> lower bill.</div>
+    </div>
+  </div>
+</section>
+
 <!-- HOW IT WORKS -->
-<section id="how-it-works">
+<section id="how-it-works" class="reveal">
   <h2>How it works</h2>
-  <p class="section-sub">FluxGate acts as a local HTTPS proxy. Your app talks to FluxGate; FluxGate optimises the request and forwards it upstream.</p>
+  <p class="section-sub">FluxGate is a local HTTPS proxy. Your app talks to FluxGate; FluxGate optimises the request and forwards it to the real provider over a fresh, verified TLS connection.</p>
   <div class="flow">
     <div class="flow-box">
       <div class="icon">💻</div>
       <div class="name">Your App</div>
-      <div class="desc">OpenAI SDK<br>Anthropic SDK<br>any HTTP client</div>
+      <div class="desc">OpenAI SDK · Anthropic SDK<br>any HTTP client</div>
     </div>
     <div class="flow-arrow">→</div>
     <div class="flow-box flow-middle">
@@ -194,105 +309,153 @@ footer a:hover{color:var(--text)}
     <div class="flow-box" style="margin-top:-22px">
       <div class="icon">🤖</div>
       <div class="name">LLM API</div>
-      <div class="desc">OpenAI · Anthropic<br>Gemini · Mistral</div>
+      <div class="desc">OpenAI · Anthropic<br>Gemini · Mistral · Groq</div>
     </div>
   </div>
 
   <div style="margin-top:64px">
-    <h3 style="margin-bottom:20px;font-size:1.1rem">One-line setup</h3>
-    <div class="code-block">
-<span class="c"># 1. Install (generates CA + config)</span>
-<span class="k">curl</span> <span class="n">-fsSL</span> https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash
+    <h3 style="margin-bottom:16px;font-size:1.1rem">Three steps to start saving</h3>
+    <div class="code-wrap">
+      <div class="code-block"><span class="c"># 1. Install (downloads the binary, generates &amp; trusts a local CA)</span>
+<span class="k">curl</span> -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash
 
-<span class="c"># 2. Start</span>
-<span class="k">fluxgate</span> --config ~/.fluxgate/config.toml
+<span class="c"># 2. Run — an interactive wizard sets everything up (just press Enter)</span>
+<span class="k">fluxgate</span>
 
-<span class="c"># 3. Point your app at the proxy</span>
-<span class="k">export</span> HTTPS_PROXY=<span class="s">http://127.0.0.1:8080</span>
-<span class="c"># That's it.</span>
+<span class="c"># 3. Point your app at the proxy. That's it.</span>
+<span class="k">export</span> HTTPS_PROXY=<span class="s">http://127.0.0.1:8080</span></div>
+      <button class="code-copy">Copy</button>
     </div>
+    <p class="note">Watch the savings live in the terminal, or open the web dashboard at <code>http://127.0.0.1:9090/</code>.</p>
   </div>
 </section>
 
 <!-- FEATURES -->
-<section id="features" style="border-top:1px solid var(--border)">
+<section id="features" class="reveal" style="border-top:1px solid var(--border)">
   <h2>Everything you need to cut costs</h2>
-  <p class="section-sub">Built in C++20 on Asio. Handles thousands of concurrent sessions with sub-millisecond overhead.</p>
+  <p class="section-sub">Built in C++20 on Asio. Thousands of concurrent sessions, per-session strand model, sub-millisecond overhead on a cache hit.</p>
   <div class="features">
     <div class="feature">
       <div class="feature-icon">🔁</div>
       <h3>Smart Response Cache</h3>
-      <p>Identical queries return instantly from memory — no API call, no cost. LRU + TTL with optional Redis backend for multi-instance deployments.</p>
+      <p>Identical queries return instantly from memory — no API call, no cost. Keys are normalized (sorted JSON, whitespace-insensitive) so reordered requests still hit. LRU + TTL, with an optional Redis backend.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">✂️</div>
       <h3>Chat History Trimming</h3>
-      <p>Automatically keeps only the last N messages in the context window. Cuts input token count on long conversations by 50–80%.</p>
+      <p>Keeps only the last N messages in the context window. Cuts input token count on long conversations — often the biggest line on the bill.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">🔒</div>
-      <h3>PII Redaction</h3>
-      <p>Strips email addresses and phone numbers from request bodies before they leave your network. Configurable per-deployment.</p>
+      <h3>PII & Secret Redaction</h3>
+      <p>Strips emails, phone numbers, credit cards, IP addresses and API-key-shaped secrets before they leave your network — plus your own custom regex rules. Toggle live.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">🎯</div>
-      <h3>Provider Allowlist</h3>
-      <p>MITM only the AI providers you choose. Everything else tunnels transparently. Default list covers OpenAI, Anthropic, Gemini, Mistral.</p>
+      <h3>Provider Routing</h3>
+      <p>MITM only the providers you choose; everything else tunnels through untouched. Defaults cover OpenAI, Anthropic, Gemini, Mistral, Groq.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">📊</div>
-      <h3>Live Dashboard</h3>
-      <p>Open <code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">http://localhost:9090/</code> to see sessions, cache hit rate, tokens saved, and estimated cost saved — live.</p>
+      <h3>Live Control Panel</h3>
+      <p>A web control panel at <code>:9090/</code> <em>and</em> a terminal TUI — live sparklines, and tabs for an Overview, Requests, Providers and Settings. Tune filters, cache TTL and limits without a restart.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔎</div>
+      <h3>Live Request Inspector</h3>
+      <p>A rolling log of every intercepted request — host, method, path, model, cache hit/miss, status, latency and tokens saved. Never logs body content.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🏷️</div>
+      <h3>Per-Provider Analytics</h3>
+      <p>Cost saved, hit rate, average latency and traffic broken down by provider and model — with provider-aware pricing instead of a flat rate.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🚦</div>
+      <h3>Rate Limiting & Quotas</h3>
+      <p>Per-client token-bucket limits (requests/min + burst) to stop runaway costs, plus a monthly budget reference that surfaces a dashboard alert.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">🐳</div>
       <h3>Deploy Anywhere</h3>
-      <p>Single static binary. Docker image. systemd unit. macOS launchd. Works on-prem or in a sidecar container.</p>
+      <p>Single static binary, Docker image, systemd unit. Runs on Linux and macOS, on-prem or as a sidecar container.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">🔍</div>
       <h3>Structured Logging</h3>
-      <p>NDJSON logs with request ID, host, method, path, upstream latency. Never logs body content. Pipes cleanly into Datadog, Splunk, or grep.</p>
+      <p>NDJSON logs with request ID, host, method, path and upstream latency. Never logs body content. Pipes cleanly into Datadog, Splunk, or grep.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">📈</div>
       <h3>Prometheus Metrics</h3>
-      <p><code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">GET /metrics</code> exposes all counters in Prometheus text format. Drop into your existing Grafana dashboards.</p>
+      <p><code>GET /metrics</code> exposes every counter in Prometheus text format. Drop straight into your existing Grafana dashboards.</p>
     </div>
     <div class="feature">
       <div class="feature-icon">⚙️</div>
-      <h3>TOML Config File</h3>
-      <p>All settings in one <code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">config.toml</code>. Generate defaults with <code style="font-size:.8rem;background:var(--code-bg);padding:1px 5px;border-radius:4px">--dump-config</code>. Override any value from the CLI.</p>
+      <h3>TOML Config + CLI</h3>
+      <p>All settings in one <code>fluxgate.toml</code>. Generate it with the wizard or <code>--dump-config</code>; override any value from the command line.</p>
     </div>
   </div>
 </section>
 
 <!-- INSTALL -->
-<section id="install" style="border-top:1px solid var(--border)">
-  <h2>Install in 30 seconds</h2>
-  <p class="section-sub">The installer downloads the binary, generates a local CA, trusts it in your OS keychain, and writes a default config.</p>
+<section id="install" class="reveal" style="border-top:1px solid var(--border)">
+  <h2>Install</h2>
+  <p class="section-sub">Pick your path. The script and wizard handle the CA and config for you; Docker and source builds are one command each.</p>
 
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px">
-    <div>
-      <h3 style="margin-bottom:12px;font-size:1rem">macOS &amp; Linux</h3>
-      <div class="code-block"><span class="k">curl</span> -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash</div>
-      <p style="font-size:.8rem;color:var(--muted);margin-top:8px">Installs to <code>~/.fluxgate/</code>. Run with <code>sudo</code> to trust CA system-wide.</p>
+  <div class="tabs">
+    <button class="tab active" data-tab="script">Script (macOS / Linux)</button>
+    <button class="tab" data-tab="docker">Docker</button>
+    <button class="tab" data-tab="source">Build from source</button>
+  </div>
+
+  <div class="tabpane active" data-pane="script">
+    <div class="code-wrap">
+      <div class="code-block"><span class="c"># Installs to ~/.fluxgate, generates a local CA, trusts it in your OS store</span>
+<span class="k">curl</span> -fsSL https://raw.githubusercontent.com/anonymmized/FluxGate/main/install.sh | bash
+
+<span class="c"># then just run it — the wizard does the rest</span>
+<span class="k">fluxgate</span></div>
+      <button class="code-copy">Copy</button>
     </div>
-    <div>
-      <h3 style="margin-bottom:12px;font-size:1rem">Docker</h3>
-      <div class="code-block"><span class="k">docker</span> run -d \
-  -v ~/.fluxgate:/certs:ro \
+    <p class="note">Trusting the CA system-wide may prompt for <code>sudo</code>. The installer prints the exact command if it can't do it automatically.</p>
+  </div>
+
+  <div class="tabpane" data-pane="docker">
+    <div class="code-wrap">
+      <div class="code-block"><span class="c"># 1. Generate a local CA into ./certs (one time)</span>
+<span class="k">docker</span> run --rm -v <span class="s">"$PWD/certs:/certs"</span> --entrypoint /usr/local/bin/fluxgate \
+  ghcr.io/anonymmized/fluxgate:latest --generate-ca /certs/ca
+
+<span class="c"># 2. Run the proxy — bind 0.0.0.0 so the published ports are reachable</span>
+<span class="k">docker</span> run -d --name fluxgate \
+  -v <span class="s">"$PWD/certs:/certs:ro"</span> \
   -p 8080:8080 -p 9090:9090 \
   ghcr.io/anonymmized/fluxgate:latest \
-  --mitm \
-  --mitm-ca-key /certs/ca.key.pem \
-  --mitm-ca-cert /certs/ca.cert.pem</div>
+  --listen 0.0.0.0 --admin 0.0.0.0:9090 \
+  --mitm --mitm-ca-key /certs/ca.key.pem --mitm-ca-cert /certs/ca.cert.pem
+
+<span class="c"># 3. Test it (no API key needed)</span>
+<span class="k">curl</span> -sk -x <span class="s">http://localhost:8080</span> https://httpbin.org/get</div>
+      <button class="code-copy">Copy</button>
     </div>
+    <p class="note">Inside a container the proxy <strong>must</strong> bind <code>0.0.0.0</code> — otherwise Docker's published ports can't reach it. <code>docker compose up -d</code> does all of this for you. To verify upstream certs without <code>-k</code>, mount and trust <code>./certs/ca.cert.pem</code> in the calling environment.</p>
+  </div>
+
+  <div class="tabpane" data-pane="source">
+    <div class="code-wrap">
+      <div class="code-block"><span class="k">git</span> clone https://github.com/anonymmized/FluxGate.git
+<span class="k">cd</span> FluxGate
+<span class="k">cmake</span> -S . -B build &amp;&amp; cmake --build build --parallel
+./build/FluxGate            <span class="c"># launches the setup wizard</span></div>
+      <button class="code-copy">Copy</button>
+    </div>
+    <p class="note">Requires C++20, CMake ≥ 3.15 and OpenSSL. <code>asio</code>, <code>simdjson</code> and <code>toml++</code> are fetched automatically. Redis backend: add <code>-DFLUXGATE_REDIS=ON</code>.</p>
   </div>
 </section>
 
 <!-- PRICING -->
-<section id="pricing" style="border-top:1px solid var(--border)">
+<section id="pricing" class="reveal" style="border-top:1px solid var(--border)">
   <h2>Pricing</h2>
   <p class="section-sub">FluxGate is free and open-source. Enterprise support is available for teams that need SLAs, custom filters, or managed deployment.</p>
   <div class="pricing">
@@ -304,8 +467,8 @@ footer a:hover{color:var(--text)}
         <li>Full MITM proxy pipeline</li>
         <li>PII redaction + history trimming</li>
         <li>In-memory &amp; Redis cache</li>
-        <li>Docker + binary releases</li>
-        <li>Prometheus metrics + dashboard</li>
+        <li>Docker + signed binary releases</li>
+        <li>Prometheus metrics + dashboards</li>
         <li>Community support (GitHub Issues)</li>
       </ul>
       <a href="https://github.com/anonymmized/FluxGate" class="plan-cta secondary">View on GitHub →</a>
@@ -328,30 +491,30 @@ footer a:hover{color:var(--text)}
 </section>
 
 <!-- FAQ -->
-<section style="border-top:1px solid var(--border)">
+<section class="reveal" style="border-top:1px solid var(--border)">
   <h2>Frequently asked questions</h2>
-  <p class="section-sub"></p>
+  <p class="section-sub">&nbsp;</p>
   <div class="faq">
-    <div class="faq-item">
-      <div class="faq-q">Is it safe to route my API keys through FluxGate?</div>
-      <div class="faq-a">FluxGate runs <strong>locally</strong> — on your machine or inside your network. Your traffic never leaves your infrastructure. FluxGate never stores API keys or response content. Structured logs contain only metadata (host, method, path, latency). See <a href="https://github.com/anonymmized/FluxGate/blob/main/docs/SECURITY.md">SECURITY.md</a> for the full trust model.</div>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">Does it work with streaming responses (Server-Sent Events)?</div>
-      <div class="faq-a">Yes — streaming responses are relayed byte-for-byte without buffering. FluxGate automatically skips caching for SSE streams (Content-Type: text/event-stream).</div>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">What languages / SDKs are supported?</div>
-      <div class="faq-a">Any HTTP client that supports HTTP CONNECT proxies: Python (openai, anthropic), Node.js, Go, Ruby, Java, curl, etc. See <a href="https://github.com/anonymmized/FluxGate/tree/main/examples">examples/</a> for ready-to-run code.</div>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">How much traffic can it handle?</div>
-      <div class="faq-a">FluxGate uses async C++20 (Asio) with a per-session strand model. A single instance handles thousands of concurrent connections on commodity hardware. Each session adds &lt;1ms overhead for a cache hit.</div>
-    </div>
-    <div class="faq-item">
-      <div class="faq-q">Does it support multiple instances / horizontal scaling?</div>
-      <div class="faq-a">Yes — use Redis as the cache backend (<code>cache.backend = "redis"</code>) so all instances share the same cache. Each instance is stateless otherwise.</div>
-    </div>
+    <details class="faq-item">
+      <summary class="faq-q">Is it safe to route my API keys through FluxGate?</summary>
+      <div class="faq-a">FluxGate runs <strong>locally</strong> — on your machine or inside your network. Your traffic never leaves your infrastructure through it. It never stores API keys or response content; structured logs contain only metadata (host, method, path, latency). See <a href="https://github.com/anonymmized/FluxGate/blob/main/docs/SECURITY.md">SECURITY.md</a> for the full trust model.</div>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">Does it work with streaming responses (SSE)?</summary>
+      <div class="faq-a">Yes — streaming responses are relayed byte-for-byte without buffering. FluxGate automatically skips caching for SSE streams (<code>Content-Type: text/event-stream</code>).</div>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">Which languages / SDKs are supported?</summary>
+      <div class="faq-a">Any HTTP client that supports HTTP CONNECT proxies: Python (<code>openai</code>, <code>anthropic</code>), Node.js, Go, Ruby, Java, curl, and more. See <a href="https://github.com/anonymmized/FluxGate/tree/main/examples">examples/</a> for ready-to-run code.</div>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">How much traffic can it handle?</summary>
+      <div class="faq-a">Async C++20 (Asio) with a per-session strand model. A single instance handles thousands of concurrent connections on commodity hardware; each cache hit adds &lt;1ms of overhead.</div>
+    </details>
+    <details class="faq-item">
+      <summary class="faq-q">Can I run multiple instances / scale horizontally?</summary>
+      <div class="faq-a">Yes — use Redis as the cache backend (<code>cache.backend = "redis"</code>) so all instances share one cache. Each instance is otherwise stateless.</div>
+    </details>
   </div>
 </section>
 
@@ -367,14 +530,89 @@ footer a:hover{color:var(--text)}
 </footer>
 
 <script>
-function copyInstall() {
-  const cmd = document.querySelector('#hero-install code').textContent;
-  navigator.clipboard.writeText(cmd).then(() => {
-    const btn = document.querySelector('.copy-btn');
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = 'Copy', 2000);
+// Copy buttons — works for [data-copy="#id"] and any .code-copy next to a .code-block
+function flash(btn){const t=btn.textContent;btn.textContent='Copied!';setTimeout(()=>btn.textContent=t,1600)}
+document.querySelectorAll('[data-copy]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const el=document.querySelector(btn.getAttribute('data-copy'));
+    navigator.clipboard.writeText(el.textContent.trim()).then(()=>flash(btn));
   });
-}
+});
+document.querySelectorAll('.code-copy').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const code=btn.parentElement.querySelector('.code-block');
+    navigator.clipboard.writeText(code.textContent.trim()).then(()=>flash(btn));
+  });
+});
+
+// Install tabs
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelector(`.tabpane[data-pane="${tab.dataset.tab}"]`).classList.add('active');
+  });
+});
+
+// Reveal on scroll
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.12});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// Scroll progress bar
+const prog=document.getElementById('progress');
+addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  const pct=h.scrollTop/(h.scrollHeight-h.clientHeight)*100;
+  prog.style.width=pct+'%';
+},{passive:true});
+
+// Cursor-follow glow on feature cards
+document.querySelectorAll('.feature').forEach(f=>{
+  f.addEventListener('pointermove',e=>{
+    const r=f.getBoundingClientRect();
+    f.style.setProperty('--mx',(e.clientX-r.left)+'px');
+    f.style.setProperty('--my',(e.clientY-r.top)+'px');
+  });
+});
+
+// Savings calculator
+(function(){
+  const $=id=>document.getElementById(id);
+  const spend=$('r-spend'),dup=$('r-dup'),trim=$('r-trim');
+  if(!spend)return;
+  const money=n=>'$'+Math.round(n).toLocaleString('en-US');
+  function calc(){
+    const s=+spend.value, d=+dup.value/100, t=+trim.value/100;
+    // Cache avoids ~full cost of duplicate requests; history-trimming saves a
+    // share of the input tokens on the long-conversation slice. Capped at 70%.
+    let pct=d + (1-d)*t*0.45;
+    pct=Math.min(pct,0.70);
+    const save=s*pct;
+    $('cv-spend').textContent=money(s);
+    $('cv-dup').textContent=dup.value+'%';
+    $('cv-trim').textContent=trim.value+'%';
+    $('cv-save').textContent=money(save);
+    $('cv-year').textContent=money(save*12);
+    $('cv-pct').textContent=Math.round(pct*100)+'%';
+  }
+  [spend,dup,trim].forEach(el=>el.addEventListener('input',calc));
+  calc();
+})();
+
+// Count-up for the stats strip (numeric values only)
+const countEls=document.querySelectorAll('[data-count]');
+const cio=new IntersectionObserver(es=>es.forEach(e=>{
+  if(!e.isIntersecting)return;cio.unobserve(e.target);
+  const el=e.target,to=+el.dataset.count,suf=el.dataset.suffix||'';
+  let start=null;const dur=1100;
+  function step(ts){if(!start)start=ts;const p=Math.min((ts-start)/dur,1);
+    const eased=1-Math.pow(1-p,3);  // easeOutCubic
+    el.textContent=Math.round(to*eased).toLocaleString('en-US')+suf;
+    if(p<1)requestAnimationFrame(step);}
+  requestAnimationFrame(step);
+}),{threshold:.5});
+countEls.forEach(el=>cio.observe(el));
 </script>
 </body>
 </html>

@@ -1,5 +1,8 @@
 #include "fluxgate/tui.h"
 
+#include "fluxgate/metrics.h"
+#include "fluxgate/pricing.h"
+
 #include <cctype>
 #include <chrono>
 #include <cstdio>
@@ -127,7 +130,6 @@ std::string FluxGateTUI::fmt_num(std::uint64_t n) {
 void FluxGateTUI::draw(const MetricsSnapshot& s) const {
     const double hit_rate = (s.cache_hits + s.cache_misses > 0)
         ? static_cast<double>(s.cache_hits) / (s.cache_hits + s.cache_misses) : 0.0;
-    const double cost_saved = s.estimated_tokens_saved * 5.0 / 1'000'000.0;
 
     std::ostringstream o;
     o << CLEAR;
@@ -167,12 +169,37 @@ void FluxGateTUI::draw(const MetricsSnapshot& s) const {
     // Savings + Traffic
     {
         o << row(" " + DIM + "SAVINGS / TRAFFIC" + RESET) << "\n";
-        std::ostringstream cost_s; cost_s << "$" << std::fixed << std::setprecision(4) << cost_saved;
-        const std::string cost_col = (cost_saved > 0.01 ? B_YELLOW : DIM) + cost_s.str() + RESET;
+        std::ostringstream cost_s; cost_s << "$" << std::fixed << std::setprecision(4)
+            << s.estimated_cost_saved_usd;
+        const std::string cost_col = (s.estimated_cost_saved_usd > 0.01 ? B_YELLOW : DIM) + cost_s.str() + RESET;
         o << row("  Tokens  " + B_PURPLE + pad_left(fmt_num(s.estimated_tokens_saved), 8) + RESET
                  + "      In   " + BOLD + pad_left(fmt_bytes(s.client_to_upstream_bytes), 9) + RESET) << "\n";
         o << row("  Cost  " + cost_col
                  + "      Out  " + BOLD + pad_left(fmt_bytes(s.upstream_to_client_bytes), 9) + RESET) << "\n";
+        const std::string rl_col = (s.rate_limited > 0 ? B_YELLOW : DIM)
+            + pad_left(fmt_num(s.rate_limited), 6) + RESET;
+        o << row("  Entries  " + BOLD + pad_left(fmt_num(s.cache_entries), 7) + RESET
+                 + "    Limited  " + rl_col) << "\n";
+    }
+
+    // Top providers
+    {
+        const auto provs = metrics_->top_providers(3);
+        if (!provs.empty()) {
+            o << empty_row() << "\n";
+            o << row(" " + DIM + "TOP PROVIDERS" + RESET) << "\n";
+            for (const auto& [host, st] : provs) {
+                const double hr = (st.cache_hits + st.cache_misses > 0)
+                    ? 100.0 * st.cache_hits / (st.cache_hits + st.cache_misses) : 0.0;
+                std::string label = provider_label(host);
+                if (label.size() > 20) label = label.substr(0, 19) + "…";
+                if (label.size() < 20) label.append(20 - label.size(), ' ');
+                std::ostringstream hrs; hrs << std::fixed << std::setprecision(0) << hr << "%";
+                o << row("  " + CYAN + label + RESET
+                         + "  " + BOLD + pad_left(fmt_num(st.requests), 6) + RESET + DIM + " req" + RESET
+                         + "  " + GREEN + pad_left(hrs.str(), 4) + RESET + DIM + " hit" + RESET) << "\n";
+            }
+        }
     }
 
     o << empty_row() << "\n";

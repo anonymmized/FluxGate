@@ -48,9 +48,14 @@ void test_http_parser() {
 }
 
 void test_filters() {
+    fluxgate::AppConfig cfg;
+    cfg.enable_pii_redaction = true;
+    cfg.max_chat_history = 2;
+    auto controls = std::make_shared<fluxgate::RuntimeControls>(cfg);
+
     fluxgate::FilterPipeline pipeline;
-    pipeline.add(std::make_unique<fluxgate::PiiRedactionFilter>());
-    pipeline.add(std::make_unique<fluxgate::ChatHistoryLimitFilter>(2));
+    pipeline.add(std::make_unique<fluxgate::PiiRedactionFilter>(controls));
+    pipeline.add(std::make_unique<fluxgate::ChatHistoryLimitFilter>(controls));
 
     auto request = fluxgate::parse_http_request_head("POST /v1/chat/completions HTTP/1.1\r\n\r\n");
     assert(request);
@@ -60,6 +65,23 @@ void test_filters() {
     assert(result.modified);
     assert(body.find("[REDACTED_EMAIL]") != std::string::npos || body.find("[REDACTED_PHONE]") != std::string::npos);
     assert(body.find(R"("system")") == std::string::npos);
+
+    // Live toggle: disabling PII via controls should stop redaction.
+    controls->pii_redaction.store(false);
+    std::string body2 = R"({"messages":[{"role":"user","content":"reach me at a@b.com"}]})";
+    auto r2 = pipeline.apply({}, *request, body2);
+    assert(body2.find("a@b.com") != std::string::npos);
+    (void)r2;
+}
+
+void test_normalized_cache_key() {
+    using fluxgate::normalized_cache_key;
+    // Same JSON, different key order + whitespace → same key.
+    const auto a = normalized_cache_key("POST", "h/p", R"({"a":1,"b":2})");
+    const auto b = normalized_cache_key("POST", "h/p", R"({ "b" : 2, "a" : 1 })");
+    assert(a == b);
+    const auto c = normalized_cache_key("POST", "h/p", R"({"a":1,"b":3})");
+    assert(a != c);
 }
 
 void test_cache() {
@@ -230,6 +252,7 @@ int main() {
     test_connect_parser();
     test_http_parser();
     test_filters();
+    test_normalized_cache_key();
     test_cache();
     test_config_mitm_args();
     test_config_mitm_requires_ca_paths();

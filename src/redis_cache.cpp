@@ -99,4 +99,12 @@ std::size_t RedisCache::size() const {
     return static_cast<std::size_t>(r.ptr->integer);
 }
 
+void RedisCache::clear() {
+    std::lock_guard lock(mutex_);
+    reconnect_if_needed();
+    if (!ctx_) return;
+    Reply r(redisCommand(ctx_, "FLUSHDB"));
+    (void)r;
+}
+
 } // namespace fluxgate

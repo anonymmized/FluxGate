@@ -69,7 +69,9 @@ set(FLUXGATE_SOURCES
     src/logger.cpp
     src/metrics.cpp
     src/mitm_tls.cpp
+    src/pricing.cpp
     src/proxy_server.cpp
+    src/rate_limiter.cpp
     src/setup_wizard.cpp
     src/tui.cpp
 )

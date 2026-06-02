@@ -4,6 +4,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fluxgate {
@@ -39,6 +40,13 @@ struct AppConfig {
     int mitm_leaf_valid_days = 7;
     bool enable_pii_redaction = true;
     std::size_t max_chat_history = 20;  // 0 = unlimited
+    // Extra user-defined redaction rules: regex → replacement.
+    std::vector<std::pair<std::string, std::string>> custom_redaction_rules;
+    // Per-client rate limiting (token bucket, keyed by client IP).
+    std::size_t rate_limit_rpm = 0;     // 0 = unlimited
+    std::size_t rate_limit_burst = 0;   // 0 = defaults to rpm
+    // Estimated monthly spend (USD) above which the dashboard shows a warning.
+    double monthly_budget_usd = 0.0;    // 0 = no budget alert
     // Provider filtering: hosts to intercept (allowlist) and never touch (denylist).
     // Empty allowlist = intercept all hosts that aren't in denylist.
     std::vector<std::string> provider_allowlist;

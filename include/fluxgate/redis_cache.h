@@ -21,6 +21,7 @@ public:
     void put(std::string key, std::string value, std::chrono::seconds ttl) override;
     std::optional<std::string> get(std::string_view key) override;
     std::size_t size() const override;
+    void clear() override;
 
     bool connected() const;
 

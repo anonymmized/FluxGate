@@ -22,8 +22,18 @@ leaf_cache_entries = 4096
 leaf_valid_days    = 7
 
 [filters]
-pii_redaction    = true   # strip email addresses and phone numbers
+pii_redaction    = true   # strip emails, phones, cards, IPs, API-key-shaped secrets
 max_chat_history = 20     # keep only the last N messages; 0 = unlimited
+# Extra redaction rules (regex → replacement), applied after the built-ins:
+# custom_rules = [
+#     { pattern = "secret-\\w+", replacement = "[REDACTED]" },
+# ]
+
+[limits]
+# Per-client (per-IP) token-bucket rate limiting.
+rate_limit_rpm     = 0    # requests per minute per client; 0 = unlimited
+rate_limit_burst   = 0    # bucket size; 0 = defaults to rate_limit_rpm
+monthly_budget_usd = 0    # dashboard shows an alert past this; 0 = no alert
 
 [cache]
 enabled     = true
@@ -35,8 +45,16 @@ enabled = true
 listen  = "127.0.0.1"
 port    = 9090
 # Endpoints:
-#   GET /healthz  → "ok"
-#   GET /metrics  → Prometheus text format
+#   GET  /            → web control panel (Overview · Requests · Providers · Settings)
+#   GET  /healthz     → "ok"
+#   GET  /metrics     → Prometheus text format
+#   GET  /stats       → live metrics JSON
+#   GET  /providers   → per-provider rollup JSON
+#   GET  /requests    → recent request log JSON
+#   GET  /api/config  → current runtime settings
+#   POST /api/control → update settings live (filters, cache, limits, routing)
+#   POST /api/cache/clear → flush the cache
+# token = "changeme"   # require "Authorization: Bearer <token>" on all endpoints
 
 [providers]
 # MITM only these hosts (empty = intercept all non-denied hosts).

@@ -216,8 +216,9 @@ AppConfig run_setup_wizard(const std::string& out_path) {
     }
 
     // ── Admin ─────────────────────────────────────────────────
+    section("Admin Dashboard");
     cfg.admin_host = "127.0.0.1";
-    const auto admin_port_str = ask("\n  Admin dashboard port", "9090");
+    const auto admin_port_str = ask("Dashboard port", "9090");
     try { cfg.admin_port = static_cast<unsigned short>(std::stoi(admin_port_str)); }
     catch (...) { cfg.admin_port = 9090; }
 

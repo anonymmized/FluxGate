@@ -2,7 +2,6 @@
 
 #include <simdjson.h>
 
-#include <regex>
 #include <sstream>
 
 namespace fluxgate {
@@ -16,7 +15,12 @@ FilterResult FilterPipeline::apply(const FilterContext& context, const HttpReque
     for (const auto& filter : filters_) {
         auto result = filter->apply(context, request, body);
         aggregate.modified = aggregate.modified || result.modified;
-        if (result.rejected) return result;
+        aggregate.estimated_tokens_removed += result.estimated_tokens_removed;
+        aggregate.redactions += result.redactions;
+        if (result.rejected) {
+            result.modified = aggregate.modified;
+            return result;
+        }
     }
     return aggregate;
 }
@@ -25,30 +29,71 @@ std::size_t FilterPipeline::size() const noexcept {
     return filters_.size();
 }
 
+// ── PII redaction ───────────────────────────────────────────────────────────
+
+PiiRedactionFilter::PiiRedactionFilter(std::shared_ptr<RuntimeControls> controls,
+                                       const std::vector<CustomRedactionRule>& custom)
+    : controls_(std::move(controls)) {
+    // Order matters: more specific patterns first so they win over broad ones.
+    const auto add = [&](const char* pattern, const char* replacement) {
+        rules_.push_back({std::regex(pattern, std::regex::optimize), replacement});
+    };
+    add(R"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})", "[REDACTED_EMAIL]");
+    // Credit-card-like: 13–16 digits, optionally separated by spaces/dashes.
+    add(R"(\b(?:\d[ -]?){13,16}\b)", "[REDACTED_CARD]");
+    // OpenAI / generic secret keys (sk-..., or long token-looking strings).
+    add(R"(\bsk-[A-Za-z0-9_-]{16,}\b)", "[REDACTED_KEY]");
+    add(R"(\b(?:AKIA|ASIA)[A-Z0-9]{16}\b)", "[REDACTED_AWS_KEY]");
+    // IPv4 addresses.
+    add(R"(\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b)", "[REDACTED_IP]");
+    // Phone numbers (kept last among built-ins — broadest digit pattern).
+    add(R"(\+?[0-9][0-9 .()/-]{7,}[0-9])", "[REDACTED_PHONE]");
+
+    for (const auto& c : custom) {
+        if (c.pattern.empty()) continue;
+        try {
+            rules_.push_back({std::regex(c.pattern, std::regex::optimize), c.replacement});
+        } catch (const std::regex_error&) {
+            // Skip invalid user patterns rather than crashing the proxy.
+        }
+    }
+}
+
 std::string_view PiiRedactionFilter::name() const {
     return "pii-redaction";
 }
 
 FilterResult PiiRedactionFilter::apply(const FilterContext&, const HttpRequestHead&, std::string& body) {
-    const auto original = body;
-    body = std::regex_replace(body,
-        std::regex(R"([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"),
-        "[REDACTED_EMAIL]");
-    body = std::regex_replace(body,
-        std::regex(R"(\+?[0-9][0-9 .()/-]{7,}[0-9])"),
-        "[REDACTED_PHONE]");
-    return {.modified = body != original};
+    if (controls_ && !controls_->pii_redaction.load(std::memory_order_relaxed)) return {};
+    if (body.empty()) return {};
+
+    FilterResult result;
+    for (const auto& rule : rules_) {
+        // Count matches so the dashboard can show how much PII was scrubbed.
+        auto begin = std::sregex_iterator(body.begin(), body.end(), rule.regex);
+        const auto end = std::sregex_iterator();
+        const auto n = static_cast<std::size_t>(std::distance(begin, end));
+        if (n == 0) continue;
+        result.redactions += n;
+        body = std::regex_replace(body, rule.regex, rule.replacement);
+    }
+    result.modified = result.redactions > 0;
+    return result;
 }
 
-ChatHistoryLimitFilter::ChatHistoryLimitFilter(std::size_t max_messages)
-    : max_messages_(max_messages) {}
+// ── Chat history trimming ─────────────────────────────────────────────────
+
+ChatHistoryLimitFilter::ChatHistoryLimitFilter(std::shared_ptr<RuntimeControls> controls)
+    : controls_(std::move(controls)) {}
 
 std::string_view ChatHistoryLimitFilter::name() const {
     return "chat-history-limit";
 }
 
 FilterResult ChatHistoryLimitFilter::apply(const FilterContext&, const HttpRequestHead&, std::string& body) {
-    if (max_messages_ == 0 || body.empty()) return {};
+    const std::size_t max_messages =
+        controls_ ? controls_->max_chat_history.load(std::memory_order_relaxed) : 0;
+    if (max_messages == 0 || body.empty()) return {};
 
     simdjson::dom::parser parser;
     simdjson::dom::element root;
@@ -56,9 +101,9 @@ FilterResult ChatHistoryLimitFilter::apply(const FilterContext&, const HttpReque
 
     simdjson::dom::array messages;
     if (root["messages"].get(messages) != simdjson::SUCCESS) return {};
-    if (messages.size() <= max_messages_) return {};
+    if (messages.size() <= max_messages) return {};
 
-    const auto skip = messages.size() - max_messages_;
+    const auto skip = messages.size() - max_messages;
 
     // Serialize the truncated messages array using simdjson's DOM serialization
     std::ostringstream arr;
