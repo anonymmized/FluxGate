@@ -55,8 +55,53 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
 
+  # ── Desktop app installers (Electron) ──────────────────────────────────────
+  # Built on native runners so each platform produces a real installer:
+  #   macOS  → .dmg (+ .zip)      Linux → .AppImage + .deb
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: dist:mac
+          - os: ubuntu-24.04
+            target: dist:linux
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build desktop installer
+        working-directory: desktop
+        env:
+          # Build unsigned installers — no Apple Developer identity in CI.
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          npm ci
+          npm run ${{ matrix.target }}
+
+      - name: Collect installers
+        run: |
+          mkdir -p desktop-installers
+          find desktop/dist -maxdepth 1 -type f \
+            \( -name '*.dmg' -o -name '*.zip' -o -name '*.AppImage' -o -name '*.deb' \) \
+            -exec cp {} desktop-installers/ \;
+          ls -la desktop-installers
+
+      - name: Upload installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: desktop-installers/*
+
   release:
-    needs: build
+    needs: [build, desktop]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -70,7 +115,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum fluxgate-* > SHA256SUMS.txt
+          sha256sum fluxgate-* *.dmg *.AppImage *.deb 2>/dev/null > SHA256SUMS.txt || true
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
@@ -80,4 +125,8 @@ jobs:
           files: |
             dist/fluxgate-linux-amd64
             dist/fluxgate-macos-arm64
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
             dist/SHA256SUMS.txt
