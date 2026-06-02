@@ -2,7 +2,8 @@
   "name": "fluxgate-desktop",
   "version": "0.5.0",
   "description": "FluxGate — native control panel for macOS & Linux",
-  "author": "FluxGate",
+  "author": { "name": "FluxGate", "email": "hi@fluxgate.dev" },
+  "homepage": "https://github.com/anonymmized/FluxGate",
   "license": "MIT",
   "main": "main.js",
   "scripts": {
@@ -27,7 +28,8 @@
     "linux": {
       "category": "Development",
       "target": ["AppImage", "deb"],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.png",
+      "maintainer": "FluxGate <hi@fluxgate.dev>"
     }
   }
 }
